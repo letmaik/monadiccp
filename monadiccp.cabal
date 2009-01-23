@@ -1,0 +1,10 @@
+Name:                monadiccp
+Version:             0.1
+Description:         Monadic Constraint Programming framework
+License:             GPL
+License-file:        LICENSE
+Author:              Tom Schrijvers 
+Maintainer:          tom.schrijvers@cs.kuleuven.be
+Build-Depends:       base
+Exposed-modules:     Solver FD Domain FDSugar PriorityQueue SearchTree Transformers
+ghc-options:         -O
