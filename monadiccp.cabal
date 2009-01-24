@@ -1,7 +1,7 @@
 Name:                monadiccp
 Version:             0.1
 Description:         Monadic Constraint Programming framework
-License:             GPL
+License:             BSD3
 License-file:        LICENSE
 Author:              Tom Schrijvers 
 Maintainer:          tom.schrijvers@cs.kuleuven.be
