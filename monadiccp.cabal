@@ -9,3 +9,5 @@ Build-Depends:       base, containers, mtl, haskell98, random
 Build-Type:          Simple
 Exposed-modules:     Language.CP.Solver Language.CP.FD Language.CP.Domain Language.CP.FDSugar Language.CP.PriorityQueue Language.CP.SearchTree Language.CP.Transformers
 ghc-options:         
+Category:            control
+Synopsis:	     Package for Constraint Programming based on the Monadic Constraint Programming article by T. Schrijvers, P. Stuckey, and P. Wadler.
