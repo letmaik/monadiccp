@@ -14,7 +14,7 @@
 {-# LANGUAGE OverlappingInstances #-}
 {-# LANGUAGE IncoherentInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
-module Domain (
+module Language.CP.Domain (
     Domain,
     ToDomain,
     toDomain,
@@ -25,7 +25,7 @@ module Domain (
     difference,
     union,
     empty,
-    Domain.null,
+    null,
     singleton,
     isSingleton,
     filterLessThan,
@@ -38,6 +38,7 @@ module Domain (
 
 import qualified Data.IntSet as IntSet
 import Data.IntSet (IntSet)
+import Prelude hiding (null)
 
 data Domain
     = Set IntSet
@@ -107,7 +108,7 @@ union (Range xl xh) (Range yl yh)
       | otherwise = union (Set $ IntSet.fromList [xl..xh]) 
                           (Set $ IntSet.fromList [yl..yh]) 
 union x@(Set xs) y@(Range yl yh) =
-      if Domain.null x then y 
+      if null x then y 
       else
       let xmin = IntSet.findMin xs
           xmax = IntSet.findMax xs

@@ -5,6 +5,7 @@ License:             BSD3
 License-file:        LICENSE
 Author:              Tom Schrijvers 
 Maintainer:          tom.schrijvers@cs.kuleuven.be
-Build-Depends:       base
-Exposed-modules:     Solver FD Domain FDSugar PriorityQueue SearchTree Transformers
+Build-Depends:       base, containers, mtl, haskell98, random
+Build-Type:          Simple
+Exposed-modules:     Language.CP.Solver Language.CP.FD Language.CP.Domain Language.CP.FDSugar Language.CP.PriorityQueue Language.CP.SearchTree Language.CP.Transformers
 ghc-options:         -O

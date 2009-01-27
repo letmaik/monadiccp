@@ -6,7 +6,7 @@
  - 	http://www.cs.kuleuven.be/~toms/Haskell/
  - 	Tom Schrijvers
  -}
-module Solver where 
+module Language.CP.Solver where 
 
 class Monad solver => Solver solver where
 	-- the constraints

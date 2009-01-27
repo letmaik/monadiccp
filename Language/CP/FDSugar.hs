@@ -7,18 +7,18 @@
 {-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module FDSugar where 
+module Language.CP.FDSugar where 
 
-import SearchTree hiding (label)
-import Transformers
-import ComposableTransformers
-import Queue
-import Solver
+import Language.CP.SearchTree hiding (label)
+import Language.CP.Transformers
+import Language.CP.ComposableTransformers
+import Language.CP.Queue
+import Language.CP.Solver
 
 import GHC.Exts (sortWith)
-import qualified PriorityQueue
+import qualified Language.CP.PriorityQueue as PriorityQueue
 import qualified Data.Sequence
-import FD
+import Language.CP.FD
 
 dfs = []
 bfs = Data.Sequence.empty
