@@ -11,3 +11,4 @@ Exposed-modules:     Language.CP.ComposableTransformers  Language.CP.Domain  Lan
 ghc-options:         
 Category:            control
 Synopsis:	     Package for Constraint Programming
+Homepage:            http://www.cs.kuleuven.be/~toms/Haskell/
