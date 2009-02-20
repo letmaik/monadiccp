@@ -41,7 +41,6 @@ instance Solver FD where
 
   newvarSM 	= newVar () >>= return . FD_Var 
   addSM    	= addFD
-  storeSM  	= undefined
   runSM p   	= runFD p
 
   markSM	= get

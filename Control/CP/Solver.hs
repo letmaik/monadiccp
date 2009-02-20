@@ -20,8 +20,6 @@ class Monad solver => Solver solver where
 	-- add a constraint to the current state, and
 	-- return whethe the resulting state is consistent
 	addSM		:: Constraint solver -> solver Bool
-	-- reify the current state
-	storeSM		:: solver [Constraint solver]
 	-- run a computation
 	runSM		:: solver a -> a
 	-- mark the current state, and return its label
