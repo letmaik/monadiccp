@@ -9,12 +9,12 @@
 {-# LANGUAGE ImpredicativeTypes #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module Language.CP.ComposableTransformers where 
+module Control.CP.ComposableTransformers where 
 
-import Language.CP.Transformers
-import Language.CP.SearchTree
-import Language.CP.Solver
-import Language.CP.Queue
+import Control.CP.Transformers
+import Control.CP.SearchTree
+import Control.CP.Solver
+import Control.CP.Queue
 
 import System.Random (mkStdGen, randoms)
 

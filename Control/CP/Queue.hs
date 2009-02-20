@@ -9,10 +9,10 @@
  - 	Tom Schrijvers
  -}
 
-module Language.CP.Queue where
+module Control.CP.Queue where
 
 import qualified Data.Sequence
-import qualified Language.CP.PriorityQueue as PriorityQueue
+import qualified Control.CP.PriorityQueue as PriorityQueue
 
 class Queue q where   
   type Elem q :: *

@@ -14,7 +14,7 @@
 {-# LANGUAGE OverlappingInstances #-}
 {-# LANGUAGE IncoherentInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
-module Language.CP.Domain (
+module Control.CP.FD.Domain (
     Domain,
     ToDomain,
     toDomain,

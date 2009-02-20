@@ -6,11 +6,11 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE Rank2Types #-}
-module Language.CP.Transformers where 
+module Control.CP.Transformers where 
 
-import Language.CP.Solver
-import Language.CP.SearchTree
-import Language.CP.Queue
+import Control.CP.Solver
+import Control.CP.SearchTree
+import Control.CP.Queue
 
 --------------------------------------------------------------------------------
 -- EVALUATION

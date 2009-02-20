@@ -7,10 +7,10 @@
  - 	Tom Schrijvers
  -}
 
-module Language.CP.SearchTree  where
+module Control.CP.SearchTree  where
 
 import Monad
-import Language.CP.Solver
+import Control.CP.Solver
 
 -------------------------------------------------------------------------------
 ----------------------------------- Tree --------------------------------------

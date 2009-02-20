@@ -3,13 +3,13 @@
  - 	http://www.cs.kuleuven.be/~toms/Haskell/
  - 	Tom Schrijvers
  -}
-module Language.CP.Main where
+module Control.CP.Main where
 
-import Language.CP.ComposableTransformers
-import Language.CP.FD
-import Language.CP.FDSugar
+import Control.CP.ComposableTransformers
+import Control.CP.FD
+import Control.CP.FDSugar
 import List (tails)
-import Language.CP.SearchTree hiding (label)
+import Control.CP.SearchTree hiding (label)
 import System (getArgs)
 
 --------------------------------------------------------------------------------

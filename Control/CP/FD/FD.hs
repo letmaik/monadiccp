@@ -13,7 +13,8 @@
 {-# OPTIONS_GHC -fglasgow-exts #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE OverlappingInstances #-}
-module Language.CP.FD where 
+
+module Control.CP.FD.FD where 
 
 import Prelude hiding (lookup)
 import Maybe (fromJust,isJust)
@@ -23,9 +24,9 @@ import qualified Data.Map as Map
 import Data.Map ((!), Map)
 import Control.Monad (liftM,(<=<))
 
-import Language.CP.Domain as Domain
+import Control.CP.FD.Domain as Domain
 
-import Language.CP.Solver
+import Control.CP.Solver
 
 -- import Debug.Trace
 trace = flip const

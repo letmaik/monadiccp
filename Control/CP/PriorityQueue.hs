@@ -24,7 +24,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 Retrieved from: http://en.literateprograms.org/Priority_Queue_(Haskell)?oldid=13634
 -}
 
-module Language.CP.PriorityQueue (
+module Control.CP.PriorityQueue (
     PriorityQueue,
     empty,
     is_empty,
