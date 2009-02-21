@@ -51,11 +51,11 @@ instance HTerm t => Solver (Herbrand t) where
   type Term       (Herbrand t)  = t
   type Constraint (Herbrand t)  = Unify t 
   type Label      (Herbrand t)  = HState t
-  newvarSM  = newvarH
-  addSM     = addH
-  markSM    = get
-  gotoSM    = put
-  runSM     = flip evalState initState . unH
+  newvar  = newvarH
+  add     = addH
+  mark    = get
+  goto    = put
+  run     = flip evalState initState . unH
 
 initState = HState 0 Data.Map.empty
 

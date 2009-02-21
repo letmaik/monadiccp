@@ -43,7 +43,7 @@ ld = CLDST
 newBound :: NewBound FD
 newBound = do obj <- fd_objective
               (val:_) <- fd_domain obj 
-	      l <- markSM
+	      l <- mark
               return ((\tree -> tree `insertTree` (obj @< val)) :: forall b . Tree FD b -> Tree FD b)
 
 newBoundBis :: NewBound FD 
@@ -55,12 +55,12 @@ newBoundBis = do obj <- fd_objective
 restart :: (Queue q, Solver solver, CTransformer c, CForSolver c ~ solver,
           Elem q ~ (Label solver,Tree solver (CForResult c),CTreeState c)) 
       => q -> [c] -> Tree solver (CForResult c) -> (Int,[CForResult c])
-restart q cs model = runSM $ eval model q (RestartST (map Seal cs) return)
+restart q cs model = run $ eval model q (RestartST (map Seal cs) return)
 
 restartOpt :: (Queue q, CTransformer c, CForSolver c ~ FD,
           Elem q ~ (Label FD,Tree FD (CForResult c),CTreeState c)) 
       => q -> [c] -> Tree FD (CForResult c) -> (Int,[CForResult c])
-restartOpt q cs model = runSM $ eval model q (RestartST (map Seal cs) opt)
+restartOpt q cs model = run $ eval model q (RestartST (map Seal cs) opt)
 	where opt tree = newBound >>= \f -> return (f tree)
 
 --------------------------------------------------------------------------------

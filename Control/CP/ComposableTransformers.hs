@@ -25,7 +25,7 @@ import System.Random (mkStdGen, randoms)
 solve :: (Queue q, Solver solver, CTransformer c, CForSolver c ~ solver,
           Elem q ~ (Label solver,Tree solver (CForResult c),CTreeState c)) 
       => q -> c -> Tree solver (CForResult c) -> (Int,[CForResult c])
-solve q c model = runSM $ eval model q (TStack c)
+solve q c model = run $ eval model q (TStack c)
 
 --------------------------------------------------------------------------------
 -- COMPOSABLE TRANSFORMERS
@@ -256,7 +256,7 @@ instance Solver solver => Transformer (RestartST es ts solver a) where
   type ForResult (RestartST es ts solver a) = a
   initT  (RestartST (c:cs) _) tree  = 
  	let (es,ts) = initCT c
-        in do l <-  markSM
+        in do l <-  mark
 	      return ((c,cs,es,l,tree),ts)
   leftT  _ (c,_,_,_,_)      = leftCT c
   rightT _ (c,_,_,_,_)      = rightCT c

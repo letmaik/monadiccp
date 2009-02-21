@@ -16,13 +16,13 @@ class Monad solver => Solver solver where
  	-- the labels
 	type Label solver	:: *
 	-- produce a fresh constraint variable
-	newvarSM 	:: solver (Term solver)
+	newvar 	:: solver (Term solver)
 	-- add a constraint to the current state, and
 	-- return whethe the resulting state is consistent
-	addSM		:: Constraint solver -> solver Bool
+	add		:: Constraint solver -> solver Bool
 	-- run a computation
-	runSM		:: solver a -> a
+	run		:: solver a -> a
 	-- mark the current state, and return its label
-	markSM		:: solver (Label solver)
+	mark		:: solver (Label solver)
 	-- go to the state with given label
-	gotoSM		:: Label solver -> solver ()
+	goto		:: Label solver -> solver ()

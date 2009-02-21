@@ -39,12 +39,12 @@ instance Solver FD where
   type Term       FD  = FD_Term
   type Label      FD  = FDState
 
-  newvarSM 	= newVar () >>= return . FD_Var 
-  addSM    	= addFD
-  runSM p   	= runFD p
+  newvar 	= newVar () >>= return . FD_Var 
+  add    	= addFD
+  run p   	= runFD p
 
-  markSM	= get
-  gotoSM	= put 
+  mark	= get
+  goto	= put 
 
 data FD_Term where
   FD_Var :: FDVar -> FD_Term
