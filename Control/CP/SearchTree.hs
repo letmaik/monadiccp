@@ -16,13 +16,13 @@ import Control.CP.Solver
 ----------------------------------- Tree --------------------------------------
 -------------------------------------------------------------------------------
 
-data Tree s a
- 		= Fail                          -- failure
-                | Return a                      -- finished
-                | Try (Tree s a) (Tree s a)     -- disjunction
-                | Add (Constraint s) (Tree s a) -- sequentially adding a constraint to a tree
-                | NewVar (Term s -> Tree s a)   -- add a new variable to a tree
-	        | Label (s (Tree s a))      	-- label with a strategy
+data Tree s a where
+  Fail    :: Tree s a                                  -- failure
+  Return  :: a -> Tree s a                             -- finished
+  Try     :: Tree s a -> Tree s a -> Tree s a          -- disjunction
+  Add     :: Constraint s -> Tree s a -> Tree s a      -- sequentially adding a constraint to a tree
+  NewVar  :: Term s t => (t -> Tree s a) -> Tree s a   -- add a new variable to a tree
+  Label   :: s (Tree s a) -> Tree s a      	       -- label with a strategy
 
 instance Show (Tree s a)  where
   show Fail 		= "Fail"
@@ -154,15 +154,15 @@ disj2 l        = let (xs,ys)      = split l
                                     in  (a:cs,bs)
                  in  Try (disj2 xs) (disj2 ys)
  
-exists :: (Term s -> Tree s a) -> Tree s a
+exists :: Term s t => (t -> Tree s a) -> Tree s a
 exists f = NewVar f
 
-exist :: Solver s => Int -> ([Term s] -> Tree s a) -> Tree s a
+exist :: (Solver s, Term s t) => Int -> ([t] -> Tree s a) -> Tree s a
 exist n ftree = f n []
          where f 0 acc  = ftree acc
                f n acc  = exists $ \v -> f (n-1) (v:acc)
 
-forall :: Solver s => [Term s] -> (Term s -> Tree s ()) -> Tree s ()
+forall :: (Solver s, Term s t)  => [t] -> (t -> Tree s ()) -> Tree s ()
 forall list ftree = conj $ map ftree list
  
 label :: Solver s => s (Tree s a) -> Tree s a

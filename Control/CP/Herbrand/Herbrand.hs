@@ -1,6 +1,8 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE PatternGuards #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 module Control.CP.Herbrand.Herbrand where 
 
 import Control.Monad.State.Lazy
@@ -48,14 +50,16 @@ updateState f = get >>= put . f
 -- Solver instance 
 
 instance HTerm t => Solver (Herbrand t) where
-  type Term       (Herbrand t)  = t
   type Constraint (Herbrand t)  = Unify t 
   type Label      (Herbrand t)  = HState t
-  newvar  = newvarH
   add     = addH
   mark    = get
   goto    = put
   run     = flip evalState initState . unH
+
+instance HTerm t => Term (Herbrand t) t where
+  newvar  = newvarH
+
 
 initState = HState 0 Data.Map.empty
 

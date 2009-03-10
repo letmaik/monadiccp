@@ -36,15 +36,14 @@ trace = flip const
 
 instance Solver FD where
   type Constraint FD  = FD_Constraint
-  type Term       FD  = FD_Term
   type Label      FD  = FDState
-
-  newvar 	= newVar () >>= return . FD_Var 
   add    	= addFD
   run p   	= runFD p
-
   mark	= get
   goto	= put 
+
+instance Term FD FD_Term where
+  newvar 	= newVar () >>= return . FD_Var 
 
 data FD_Term where
   FD_Var :: FDVar -> FD_Term
