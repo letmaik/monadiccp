@@ -3,6 +3,7 @@
 {-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleContexts #-}
 module Control.CP.Herbrand.Herbrand where 
 
 import Control.Monad.State.Lazy
@@ -21,7 +22,7 @@ class HTerm t where
   isVar    :: t   -> Maybe VarId
   children :: t -> ([t], [t] -> t)
   nonvar_unify
-        :: t -> t -> Herbrand t Bool
+        :: (MonadState (HState t) m) => t -> t -> m Bool
 
 -- Herbrand monad
 
@@ -44,7 +45,7 @@ data HState t = HState {var_supply :: VarId
                        ,subst      :: Subst t
                        }
 
-updateState :: HTerm t => (HState t -> HState t) -> Herbrand t ()
+updateState :: (HTerm t, MonadState (HState t) m) => (HState t -> HState t) -> m ()
 updateState f = get >>= put . f
 
 -- Solver instance 
@@ -65,7 +66,7 @@ initState = HState 0 Data.Map.empty
 
 -- New variable
 
-newvarH :: HTerm t => Herbrand t t
+newvarH :: (HTerm t,MonadState (HState t) m) => m t
 newvarH = do state <- get
              let varid = var_supply state
              put state{var_supply = varid + 1}
@@ -75,9 +76,10 @@ newvarH = do state <- get
 
 data Unify t = t `Unify` t
 
+addH :: (HTerm t, MonadState (HState t) m) => Unify t -> m Bool
 addH (Unify t1 t2) = unify t1 t2
 
-unify :: HTerm t => t -> t -> Herbrand t Bool
+unify :: (HTerm t, MonadState (HState t) m) => t -> t -> m Bool
 unify t1 t2 = 
   do nt1 <- shallow_normalize t1
      nt2 <- shallow_normalize t2
@@ -88,16 +90,16 @@ unify t1 t2 =
        (_      , Just v2) -> bind v2 nt1 >> success
        (_      , _      ) -> nonvar_unify nt1 nt2
 
-success, failure :: HTerm t => Herbrand t Bool
+success, failure :: Monad m => m Bool
 success  = return True
 failure  = return False
 
-bind :: HTerm t => VarId -> t -> Herbrand t ()
+bind :: (HTerm t, MonadState (HState t) m) => VarId -> t -> m ()
 bind v t  = updateState $ \state -> state{subst = insert v t (subst state)}
 
 -- Normalization
 
-shallow_normalize :: HTerm t => t -> Herbrand t t
+shallow_normalize :: (HTerm t, MonadState (HState t) m) => t -> m t
 shallow_normalize t
   | Just v <- isVar t    
      = do state <- get
@@ -107,11 +109,11 @@ shallow_normalize t
   | otherwise  
      = return t
 
-normalize :: HTerm t => t -> Herbrand t t
+normalize :: (HTerm t, MonadState (HState t) m) => t -> m t
 normalize t
   | Just v <- isVar t  = do state <- get
                             case Data.Map.lookup v (subst state) of
                               Just t' -> normalize t'
                               Nothing -> return t
   | otherwise          = let (ts,mkt)  = children t
-                         in pure mkt <*> mapM normalize ts
+                         in mapM normalize ts >>= return . mkt
