@@ -1,6 +1,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 -- |This module provides a Herbrand solver as a monad transformer.
 --
@@ -19,12 +20,19 @@ import Control.Monad.State.Lazy
 import Control.CP.Solver
 import Control.CP.Herbrand.Herbrand (HState, Unify, HTerm,initState,addH,newvarH)
 
-newtype HerbrandT t m a = HerbrandT { unHT :: StateT (HState t) m a }
-  deriving (MonadTrans, Monad, MonadState (HState t))
+newtype HerbrandT t s a = HerbrandT { unHT :: StateT (HState t (HerbrandT t s)) s a }
+  deriving Monad
+
+instance MonadTrans (HerbrandT t) where
+  lift = HerbrandT . lift
+
+instance Solver s =>MonadState (HState t (HerbrandT t s)) (HerbrandT t s)  where
+  get = HerbrandT get
+  put = HerbrandT . put
 
 instance (Solver s, HTerm t) => Solver (HerbrandT t s) where
   type Constraint (HerbrandT t s)  = Either (Unify t) (Constraint s)
-  type Label      (HerbrandT t s)  = (HState t, Label s)
+  type Label      (HerbrandT t s)  = (HState t (HerbrandT t s), Label s)
   add (Left  c)  = addH c
   add (Right c)  = lift $ add c
   mark           = do l <- get
