@@ -123,27 +123,42 @@ other 	       `insertTree` t  = t /\ other
  -}
 
 -------------------------------------------------------------------------------
+----------------------------------- Monad Subclass ----------------------------
+-------------------------------------------------------------------------------
+
+infixl 2 \/
+
+class (Monad m, Solver (TreeSolver m)) => MonadTree m where
+  type TreeSolver m :: * -> *
+  addTo  :: Constraint (TreeSolver m) -> m a -> m a
+  false  :: m a
+  (\/)   :: m a -> m a -> m a
+  exists :: Term (TreeSolver m) t => (t -> m a) -> m a
+  label  :: (TreeSolver m) (m a) -> m a
+
+instance Solver solver => MonadTree (Tree solver) where
+  type TreeSolver (Tree solver)  = solver
+  addTo   =  Add
+  false   =  Fail
+  (\/)    =  Try
+  exists  =  NewVar
+  label   =  Label
+
+-------------------------------------------------------------------------------
 ----------------------------------- Sugar -------------------------------------
 -------------------------------------------------------------------------------
  
 infixr 3 /\
-(/\) :: Solver s => Tree s a -> Tree s b -> Tree s b
+(/\) :: MonadTree tree => tree a -> tree b -> tree b
 (/\) = (>>)
  
-infixl 2 \/
-(\/) :: Solver s => Tree s a -> Tree s a -> Tree s a
-(\/) = Try
+true :: MonadTree tree  => tree ()
+true = return ()
 
-false :: Tree s a
-false = Fail
- 
-true :: Tree s ()
-true = Return ()
-
-disj :: Solver s => [Tree s a] -> Tree s a
+disj :: MonadTree tree => [tree a] -> tree a
 disj = foldr (\/) false
 
-conj :: Solver s => [Tree s ()] -> Tree s ()
+conj :: MonadTree tree => [tree ()] -> tree ()
 conj = foldr (/\) true
 
 disj2 :: Solver s => [Tree s a] -> Tree s a
@@ -154,10 +169,7 @@ disj2 l        = let (xs,ys)      = split l
                                     in  (a:cs,bs)
                  in  Try (disj2 xs) (disj2 ys)
  
-exists :: Term s t => (t -> Tree s a) -> Tree s a
-exists f = NewVar f
-
-exist :: (Solver s, Term s t) => Int -> ([t] -> Tree s a) -> Tree s a
+exist :: (MonadTree tree, Term (TreeSolver tree) t) => Int -> ([t] -> tree a) -> tree a
 exist n ftree = f n []
          where f 0 acc  = ftree acc
                f n acc  = exists $ \v -> f (n-1) (v:acc)
@@ -165,11 +177,8 @@ exist n ftree = f n []
 forall :: (Solver s, Term s t)  => [t] -> (t -> Tree s ()) -> Tree s ()
 forall list ftree = conj $ map ftree list
  
-label :: Solver s => s (Tree s a) -> Tree s a
-label = Label
+prim :: MonadTree tree => TreeSolver tree a -> tree a
+prim action = label (action >>= return . return)
 
-prim :: Solver s => (s a) -> Tree s a
-prim action = Label (action >>= return . return)
-
-add :: Solver s => Constraint s -> Tree s ()
-add c = Add c true
+add :: MonadTree tree => Constraint (TreeSolver tree) -> tree ()
+add c = c `addTo` true

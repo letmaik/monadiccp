@@ -1,9 +1,16 @@
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+
 module Control.CP.Herbrand.PrologTerm  where 
 
 import Data.List (intersperse)
+
 import Control.CP.Herbrand.Herbrand
 
 data PrologTerm = PTerm String [PrologTerm] | PVar VarId
+     deriving Eq
 
 instance HTerm PrologTerm where
   mkVar           = PVar
@@ -25,4 +32,3 @@ instance HTerm PrologTerm where
 instance Show PrologTerm where
   show (PVar v)        = 'V' : show v
   show (PTerm f args)  = f ++ "(" ++ (concat $ intersperse "," $ map show args) ++ ")"
-
