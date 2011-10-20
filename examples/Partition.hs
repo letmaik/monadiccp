@@ -1,73 +1,32 @@
--- --------------------------------------------------------------------------
--- Benchmark (Finite Domain)                                               --
---                                                                         --
--- Name           : partit.pl                                              --
--- Title          : integer partitionning                                  --
--- Original Source: Daniel Diaz - INRIA France                             --
--- Adapted by     : Daniel Diaz for GNU Prolog                             --
--- Date           : September 1993 (modified March 1997)                   --
---                                                                         --
--- Partition numbers 1,2,...,N into two groups A and B such that:          --
---   a) A and B have the same length,                                      --
---   b) sum of numbers in A = sum of numbers in B,                         --
---   c) sum of squares of numbers in A = sum of squares of numbers in B.   --
---                                                                         --
--- This problem admits a solution if N is a multiple of 8.                 --
---                                                                         --
--- Note: finding a partition of 1,2...,N into 2 groups A and B such that:  --
---                                                                         --
---     Sum (k^p) = Sum l^p                                                 --
---   k in A      l in B                                                    --
---                                                                         --
--- admits a solution if N mod 2^(p+1) = 0 (N is a multiple of 2^(p+1)).    --
--- Condition a) is a special case where p=0, b) where p=1 and c) where p=2.--
---                                                                         --
--- Two redundant constraints are used:                                     --
---                                                                         --
---   - in order to avoid duplicate solutions (permutations) we impose      --
---     A1<A2<....<AN/2, B1<B2<...<BN/2 and A1<B1. This achieves much more  --
---     pruning than only fd_all_differents(A) and fd_all_differents(B).    --
---                                                                         --
---   - the half sums are known                                             --
---                              N                                          --
---        Sum k^1 = Sum l^1 = (Sum i) / 2 = N*(N+1) / 4                    --
---       k in A    l in B      i=1                                         --
---                              N                                          --
---        Sum k^2 = Sum l^2 = (Sum i^2)/2 = N*(N+1)*(2*N+1) / 12           --
---       k in A    l in B      i=1                                         --
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE FlexibleContexts #-}
 
-import Control.CP.FD.Example.Example
-import Control.CP.FD.FD
-import Control.CP.FD.Expr
-import Control.CP.SearchTree
+import Control.CP.FD.Example
 
-main = example_main_single model
-
+model :: ExampleModel ModelInt
 model n =
-  exist n $ \list1 ->
-  exist n $ \list2 ->
-      allin list1 (1,2*n)  /\
-      allin list2 (1,2*n)  /\
- (let list = list1 ++ list2 
-  in  ascending list1    /\
-      ascending list2    /\
-      head list1 @< head list2 /\
-      allDiff list  /\
-      csum list1 @= csum list2 /\
-      csum (square list1) @= csum (square list2) /\
-      csum list1 @= (cte $ hs (2*n)) /\
-      csum list2 @= (cte $ hs (2*n)) /\
-      csum (square list1) @= (cte $ hss (2*n)) /\
-      csum (square list2) @= (cte $ hss (2*n)) /\
-      return list
- ) 
+  exists $ \x -> do
+  exists $ \y -> do
+    let xy = x @++ y
+    size x @= n
+    size y @= n
+    x `allin` (cte 1,2*n)
+    y `allin` (cte 1,2*n)
+    sSorted x
+    sSorted y
+    (x!cte 0) @< (y!cte 0)
+    allDiff xy
+    let sx = xmap (\v -> v*v) x
+    let sy = xmap (\v -> v*v) y
+    xsum x @=  xsum y
+    xsum sx @= xsum sy
+    let t1 = 2*n*(2*n+1) `div` 4
+    let t2 = 2*n*(2*n+1)*(4*n+1) `div` 12
+    xsum x @= t1
+    xsum y @= t1
+    xsum sx @= t2
+    xsum sy @= t2
+    return xy
 
-ascending list = sSorted list
+main = example_sat_main_single_expr model
 
-hs, hss :: Int -> Int
-hs  n  = (n * (n + 1)) `div` 4
-hss n  = (n * (n + 1) * (2 * n +1)) `div` 12
-
-csum l = foldl1 (+) l
-
-square l = map (\x -> x * x) l

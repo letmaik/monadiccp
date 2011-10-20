@@ -1,61 +1,53 @@
--- --------------------------------------------------------------------------
--- Benchmark (Finite Domain)            INRIA Rocquencourt - ChLoE Project --
---                                                                         --
--- Name           : alpha.pl                                               --
--- Title          : alphacipher                                            --
--- Original Source: Daniel Diaz - INRIA France                             --
--- Date           : January 1993                                           --
--- Adapted for MCP: Tom Schrijvers                                                        --
---                                                                         --
--- This problem comes from the news group rec.puzzle.                      --
--- The numbers 1 - 26 have been randomly assigned to the letters of the    --
--- alphabet. The numbers beside each word are the total of the values      --
--- assigned to the letters in the word. e.g for LYRE L,Y,R,E might equal   --
--- 5,9,20 and 13 respectively or any other combination that add up to 47.  --
--- Find the value of each letter under the equations:                      --
---                                                                         --
---    BALLET  45     GLEE  66     POLKA      59     SONG     61            --
---    CELLO   43     JAZZ  58     QUARTET    50     SOPRANO  82            --
---    CONCERT 74     LYRE  47     SAXOPHONE 134     THEME    72            --
---    FLUTE   30     OBOE  53     SCALE      51     VIOLIN  100            --
---    FUGUE   50     OPERA 65     SOLO       37     WALTZ    34            --
---                                                                         --
--- Solution:                                                               --
---  [A, B,C, D, E,F, G, H, I, J, K,L,M, N, O, P,Q, R, S,T,U, V,W, X, Y, Z] --
---  [5,13,9,16,20,4,24,21,25,17,23,2,8,12,10,19,7,11,15,3,1,26,6,22,14,18] --
--- --------------------------------------------------------------------------
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE FlexibleContexts #-}
 
-import Control.CP.FD.Example.Example
-import Control.CP.FD.FD
-import Control.CP.FD.Expr
+-- A kid goes into a grocery store and buys four items. The cashier charges $7.11. 
+-- The kid pays and is about to leave when the cashier calls the kid back, and says 
+-- "Hold on, I multiplied the four items instead of adding them; I'll try again... 
+-- Gosh, with adding them the price still comes to $7.11"! What were the prices of 
+-- the four items?
+
+import Data.Char (ord)
+
+import Control.CP.FD.Example
+import Control.CP.FD.Interface
+import Control.CP.FD.Model
 import Control.CP.SearchTree
+import Control.CP.Solver
 
-main = example_main_void model
 
-model :: FDSolver solver => Tree (FDWrapper solver) [FDExpr solver]
-model =
-  exist 26 $ 
-    \list@[a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y,z] ->
-       allin list (1,26) /\
-       allDiff list /\
-       b + a + l + l + e + t             @=  45 /\
-       c + e + l + l + o                 @=  43 /\
-       c + o + n + c + e + r + t         @=  74 /\
-       f + l + u + t + e                 @=  30 /\
-       f + u + g + u + e                 @=  50 /\
-       g + l + e + e                     @=  66 /\
-       j + a + z + z                     @=  58 /\
-       l + y + r + e                     @=  47 /\
-       o + b + o + e                     @=  53 /\
-       o + p + e + r + a                 @=  65 /\
-       p + o + l + k + a                 @=  59 /\
-       q + u + a + r + t + e + t         @=  50 /\
-       s + a + x + o + p + h + o + n + e @= 134 /\
-       s + c + a + l + e                 @=  51 /\
-       s + o + l + o                     @=  37 /\
-       s + o + n + g                     @=  61 /\
-       s + o + p + r + a + n + o         @=  82 /\
-       t + h + e + m + e                 @=  72 /\
-       v + i + o + l + i + n             @= 100 /\
-       w + a + l + t + z                 @=  34 /\
-       return list
+(@==) :: (MonadTree m, TreeSolver m ~ s, Constraint s ~ Either Model q) => ModelInt -> ModelInt -> m ()
+(@==) = (@=)
+
+
+word :: ModelCol -> String -> ModelInt
+word lst = foldr (\x -> (lst!(cte $ ord x - ord 'a')+)) (cte 0)
+
+model :: ExampleModel ()
+model _ = exists $ \col -> do
+  size col @= cte 26
+  allDiff col
+  col `allin` (cte 1,cte 26)
+  word col "ballet"    @== 45
+  word col "cello"     @== 43
+  word col "concert"   @== 74
+  word col "flute"     @== 30
+  word col "fugue"     @== 50
+  word col "glee"      @== 66
+  word col "jazz"      @== 58
+  word col "lyre"      @== 47
+  word col "oboe"      @== 53
+  word col "opera"     @== 65
+  word col "polka"     @== 59
+  word col "quartet"   @== 50
+  word col "saxophone" @== 134
+  word col "scale"     @== 51
+  word col "solo"      @== 37
+  word col "song"      @== 61
+  word col "soprano"   @== 82
+  word col "theme"     @== 72
+  word col "violin"    @== 100
+  word col "waltz"     @== 34
+  return col
+
+main = example_sat_main_void model

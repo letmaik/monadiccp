@@ -1,116 +1,112 @@
-{- 
- - 	Monadic Constraint Programming
- - 	http://www.cs.kuleuven.be/~toms/Haskell/
- - 	Tom Schrijvers
- -}
-{-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Control.CP.FD.OvertonFD.Sugar (
-  newBound,
-  newBoundBis,
-  restart,
-  restartOpt,
-) where 
+) where
 
-import Control.CP.SearchTree hiding (label)
-import Control.CP.Transformers
-import Control.CP.ComposableTransformers
-import Control.CP.Queue
-import Control.CP.Solver
+import Data.Set(Set)
+import qualified Data.Set as Set
+
 import Control.CP.Debug
+import Control.Mixin.Mixin
+import Control.CP.Solver
 import Control.CP.FD.FD
-import Control.CP.FD.Expr
-import Control.CP.EnumTerm
-import Control.CP.Mixin
-
-import qualified Control.CP.PriorityQueue as PriorityQueue
-import qualified Data.Sequence
+import Control.CP.FD.SimpleFD
+import Data.Expr.Data
+import Data.Expr.Sugar
+-- import Control.CP.FD.Expr.Util
+import Control.CP.FD.Model
+import Control.CP.FD.Graph
 import Control.CP.FD.OvertonFD.OvertonFD
 
-newBound :: NewBound OvertonFD
-newBound = do obj <- fd_objective
-              (val:_) <- fd_domain obj 
-	      l <- mark
-              return ((\tree -> tree `insertTree` (obj @@< val)) :: forall b . Tree OvertonFD b -> Tree OvertonFD b)
-
-newBoundBis :: NewBound OvertonFD 
-newBoundBis = do obj <- fd_objective
-                 (val:_) <- fd_domain obj 
-                 let m = val `div` 2
-                 return ((\tree -> (obj @@< (m + 1) \/ ( obj @@> m /\ obj @@< val)) /\ tree) :: forall b . Tree OvertonFD b -> Tree OvertonFD b)
-
-restart :: (Queue q, Solver solver, CTransformer c, CForSolver c ~ solver,
-          Elem q ~ (Label solver,Tree solver (CForResult c),CTreeState c)) 
-      => q -> [c] -> Tree solver (CForResult c) -> (Int,[CForResult c])
-restart q cs model = run $ eval model q (RestartST (map Seal cs) return)
-
-restartOpt :: (Queue q, CTransformer c, CForSolver c ~ OvertonFD,
-          Elem q ~ (Label OvertonFD,Tree OvertonFD (CForResult c),CTreeState c)) 
-      => q -> [c] -> Tree OvertonFD (CForResult c) -> (Int,[CForResult c])
-restartOpt q cs model = run $ eval model q (RestartST (map Seal cs) opt)
-	where opt tree = newBound >>= \f -> return (f tree)
-
---------------------------------------------------------------------------------
--- SYNTACTIC SUGAR
---------------------------------------------------------------------------------
-
-in_domain v (l,u)  = Add (Dom (Term v) l u) true
-
-(@@<) :: FDVar -> Int -> Tree OvertonFD ()
-v @@< i  = (compile_constraint $ Less (Term v) (Const $ toInteger i)) /\ return ()
-
-(@@>) :: FDVar -> Int -> Tree OvertonFD ()
-v @@> i  = (compile_constraint $ Less (Const $ toInteger i) (Term v)) /\ return ()
-
---------------------------------------------------------------------------------
--- FD SUGAR
---------------------------------------------------------------------------------
+newVars :: Term s t => Int -> s [t]
+newVars 0 = return []
+newVars n = do
+  l <- newVars $ n-1
+  n <- newvar
+  return $ n:l
 
 instance FDSolver OvertonFD where
-  type FDTerm OvertonFD = FDVar
-  specific_compile_constraint = convert
+  type FDIntTerm OvertonFD = FDVar
+  type FDBoolTerm OvertonFD = FDVar
 
--- convert :: Mixin (FDConstraint OvertonFD -> Tree OvertonFD Bool)
-convert s t (Same a (Const i)) = debug "convert (Same a (Const i))" $ do
-  va <- decompose a
-  addT $ OHasValue va $ fromInteger i
-convert s t (Same (Const i) a) = debug "convert (Same (Const i) a)" $ do
-  va <- decompose a
-  addT $ OHasValue va $ fromInteger i
-convert s t (Same (Plus a b) c) = debug "convert (Same (Plus a b) c)" $ do
-  va <- decompose a
-  vb <- decompose b
-  vc <- decompose c
-  addT $ OAdd va vb vc
-convert s t (Same (Minus a b) c) = debug "convert (Same (Minus a b) c)" $ do
-  va <- decompose a
-  vb <- decompose b
-  vc <- decompose c
-  addT $ OSub va vb vc
-convert s t (Same (Mult a b) c) = debug "convert (Same (Mult a b) c)" $ do
-  va <- decompose a
-  vb <- decompose b
-  vc <- decompose c
-  addT $ OMult va vb vc
-convert s t (Same (Abs a) c) = debug "convert (Same (Abs a) c)" $ do
-  va <- decompose a
-  vc <- decompose c
-  addT $ OAbs va vc
-convert s t (Same a b@(Plus _ _)) = debug "convert (Same a Plus)" $ convert s t $ Same b a
-convert s t (Same a b@(Minus _ _)) = debug "convert (Same a Minus)" $ convert s t $ Same b a
-convert s t (Same a b@(Mult _ _)) = debug "convert (Same a Mult)" $ convert s t $ Same b a
-convert s t (Same a b@(Abs _)) = debug "convert (Same a Abs)" $ convert s t $ Same b a
-convert s t (Same a b) = debug "convert (Same a b)" $ do
-  va <- decompose a
-  vb <- decompose b
-  addT $ OSame va vb
-convert s t (Diff a b) = debug "convert (Diff a b)" $ do
-  va <- decompose a
-  vb <- decompose b
-  addT $ ODiff va vb
-convert s t (Less a b) = debug "convert (Less a b)" $ do
-  va <- decompose a
-  vb <- decompose b
-  addT $ OLess va vb
-convert s t x = debug "convert _" $ s x
+  type FDIntSpec OvertonFD = FDVar
+  type FDBoolSpec OvertonFD = FDVar
+  type FDColSpec OvertonFD = [FDVar]
+  
+  type FDIntSpecType OvertonFD = ()
+  type FDBoolSpecType OvertonFD = ()
+  type FDColSpecType OvertonFD = ()
+
+  fdIntSpec_const (Const i) = ((),do
+    v <- newvar
+    add $ OHasValue v $ fromInteger i
+    return v)
+  fdIntSpec_term i = ((),return i)
+  
+  fdBoolSpec_const (BoolConst i) = ((),do
+    v <- newvar 
+    add $ OHasValue v $ if i then 1 else 0
+    return v)
+  fdBoolSpec_term i = ((),return i)
+
+  fdColSpec_list l = ((),return l)
+  fdColSpec_size (Const s) = ((),newVars $ fromInteger s)
+  fdColSpec_const l = ((),error "constant collections not yet supported by overton interface")
+
+  fdColInspect = return
+
+  fdSpecify = specify <@> simple_fdSpecify
+  fdProcess = process <@> simple_fdProcess
+
+  fdEqualInt v1 v2 = addFD $ OSame v1 v2
+  fdEqualBool v1 v2 = addFD $ OSame v1 v2
+  fdEqualCol v1 v2 = do
+    if length v1 /= length v2
+      then setFailed
+      else sequence_ $ zipWith (\a b -> addFD $ OSame a b) v1 v2
+
+  fdIntVarSpec = return . Just
+  fdBoolVarSpec = return . Just
+  fdSplitIntDomain b = do
+    d <- fd_domain b
+    return $ (map (b `OHasValue`) d, True)
+  fdSplitBoolDomain b = do
+    d <- fd_domain b
+    return $ (map (b `OHasValue`) $ filter (\x -> x==0 || x==1) d, True)
+
+-- processBinary :: (EGVarId,EGVarId,EGVarId) -> (FDVar -> FDVar -> FDVar -> OConstraint) -> FDInstance OvertonFD ()
+processBinary (v1,v2,va) f = addFD $ f (getDefIntSpec v1) (getDefIntSpec v2) (getDefIntSpec va)
+
+-- processUnary :: (EGVarId,EGVarId) -> (FDVar -> FDVar -> OConstraint) -> FDInstance OvertonFD ()
+processUnary (v1,va) f = addFD $ f (getDefIntSpec v1) (getDefIntSpec va)
+
+specify :: Mixin (SpecFn OvertonFD)
+specify s t edge = case (debug ("overton-specify("++(show edge)++")") edge) of
+  EGEdge { egeCons = EGChannel, egeLinks = EGTypeData { intData=[i], boolData=[b] } } -> 
+    ([(1000,b,True,do
+      s <- getIntSpec i
+      case s of
+        Just ss -> return $ SpecResSpec ((),return (ss,Nothing))
+        _ -> return SpecResNone
+     )],[(1000,i,True,do
+      s <- getBoolSpec b
+      case s of
+        Just ss -> return $ SpecResSpec ((),return (ss,Nothing))
+        _ -> return SpecResNone
+     )],[])
+  _ -> s edge
+
+-- process :: Mixin (EGEdge -> FDInstance OvertonFD ())
+process s t con info = case (con,info) of
+    (EGIntValue c, ([],[a],[])) -> case c of
+      Const v -> addFD $ OHasValue (getDefIntSpec a) (fromInteger v)
+      _ -> error "Overton solver does not support parametrized values"
+    (EGPlus, ([],[a,b,c],[])) -> processBinary (b,c,a) OAdd
+    (EGMinus, ([],[a,b,c],[])) -> processBinary (a,c,b) OAdd
+    (EGMult, ([],[a,b,c],[])) -> processBinary (b,c,a) OMult
+    (EGAbs, ([],[a,b],[])) -> processUnary (b,a) OAbs
+    (EGDiff, ([FDSpecInfoBool {fdspBoolVal = Just (BoolConst True)}],[a,b],[])) -> addFD $ ODiff (getDefIntSpec a) (getDefIntSpec b)
+    (EGLess True, ([FDSpecInfoBool {fdspBoolVal = Just (BoolConst True)}],[a,b],[])) -> addFD $ OLess (getDefIntSpec a) (getDefIntSpec b)
+    (EGLess False, ([FDSpecInfoBool {fdspBoolVal = Just (BoolConst True)}],[a,b],[])) -> addFD $ OLessEq (getDefIntSpec a) (getDefIntSpec b)
+    (EGEqual, ([FDSpecInfoBool {fdspBoolVal = Just (BoolConst True)}],[a,b],[])) -> addFD $ OSame (getDefIntSpec a) (getDefIntSpec b)
+    _ -> s con info

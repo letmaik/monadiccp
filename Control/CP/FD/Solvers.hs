@@ -8,31 +8,34 @@ import qualified Data.Sequence
 import Control.CP.ComposableTransformers
 import Control.CP.SearchTree
 import Control.CP.FD.FD
-import Control.CP.FD.OvertonFD.Sugar
-import Control.CP.FD.OvertonFD.OvertonFD
-import Control.CP.FD.Gecode.CodegenSolver
+-- import Control.CP.FD.OvertonFD.Sugar
+-- import Control.CP.FD.OvertonFD.OvertonFD
+-- import Control.CP.FD.Gecode.CodegenSolver
 
 #ifdef RGECODE
-import Control.CP.FD.Gecode.RuntimeSolver
+-- import Control.CP.FD.Gecode.RuntimeSolver
 #endif
 
 --------------------------------------------------------------------------------
 -- FORCE SOLVERS
 --------------------------------------------------------------------------------
 
-as_overtonfd :: Tree (FDWrapper OvertonFD) a -> Tree (FDWrapper OvertonFD) a
-as_overtonfd = id
-
-as_gecode_codegen :: Tree (FDWrapper CodegenSolver) a -> Tree CodegenSolver a
-as_gecode_codegen = unwrap
-
-#ifdef RGECODE
-as_gecode_runtime :: Tree (FDWrapper RuntimeSolver) a -> Tree (FDWrapper RuntimeSolver) a
-as_gecode_runtime = id
-
-as_gecode_search :: Tree (FDWrapper SearchSolver) a -> Tree (FDWrapper SearchSolver) a
-as_gecode_search = id
-#endif
+-- as_overtonfd :: Tree (FDWrapper OvertonFD) a -> Tree OvertonFD a
+-- as_overtonfd = unwrap
+-- 
+-- as_gecode_codegen :: Tree (FDWrapper CodegenSolver) a -> Tree CodegenSolver a
+-- as_gecode_codegen = unwrap
+-- 
+-- as_gen_gecode_codegen :: (FDExpr CodegenSolver -> Tree (FDWrapper CodegenSolver) a) -> (FDExpr CodegenSolver -> Tree CodegenSolver a)
+-- as_gen_gecode_codegen f = (\x -> unwrap $ f x)
+-- 
+-- #ifdef RGECODE
+-- as_gecode_runtime :: Tree (FDWrapper RuntimeSolver) a -> Tree RuntimeSolver a
+-- as_gecode_runtime = unwrap
+-- 
+-- as_gecode_search :: Tree (FDWrapper SearchSolver) a -> Tree (FDWrapper SearchSolver) a
+-- as_gecode_search = id
+-- #endif
 
 ------------------------------------------------------------------------------
 -- SEARCH STRATEGIES

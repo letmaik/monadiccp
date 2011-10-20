@@ -16,12 +16,12 @@ module Control.CP.Solver (
   Label,
   add,
   run,
-  mark,
+  mark, markn,
   goto,
   Term,
   newvar,
   Help,
-  help
+  help,
 ) where 
 
 import Control.Monad.Writer
@@ -39,15 +39,29 @@ class Monad solver => Solver solver where
 	run		:: solver a -> a
 	-- | mark the current state, and return its label
 	mark		:: solver (Label solver)
+	-- | mark the current state as discontinued, yet return a label that is usable n times
+	markn		:: Int -> solver (Label solver)
 	-- | go to the state with given label
 	goto		:: Label solver -> solver ()
+	
+	markn _ = mark
 
 class (Solver solver) => Term solver term where
 	-- | produce a fresh constraint variable
 	newvar 	:: solver term
 
+        -- see note [Solver-Specific Term Operations]
         type Help solver term
         help :: solver () -> term -> Help solver term
+
+-- [Solver-Specific Term Operations]
+--
+-- Terms of solvers in general only support the 'newvar' operation.
+-- However, for specific solvers, all terms may support additional
+-- operations.
+--
+-- The 'Help'/'help' infrastructure allows accessing this solver-specific
+-- term operations.
 
 -- | WriterT decoration of a solver
 --   useful for producing statistics during solving
@@ -57,10 +71,10 @@ instance (Monoid w, Solver s) => Solver (WriterT w s) where
   add  = lift . add
   run  = fst . run . runWriterT
   mark = lift mark
+  markn = lift . markn
   goto = lift . goto 
 
 instance (Monoid w, Term s t) => Term (WriterT w s) t where
   newvar  = lift newvar
   type Help (WriterT w s) t = ()
   help _ _ = ()
-

@@ -1,31 +1,34 @@
-import Control.CP.FD.Example.Example
-import Control.CP.FD.FD
-import Control.CP.FD.Expr
-import Control.CP.SearchTree
-import Data.List (transpose)
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE FlexibleContexts #-}
 
-main = example_main_single model
+import Control.CP.FD.Example
 
-cutAt p l = case (splitAt p l) of
-  (l,[]) -> [l]
-  (b,r) -> b:(cutAt p r)
-mexist r c = exist (r*c) $ \list -> return $ cutAt c list
-lsum v l = (foldl1 (+) l) @= v
-diag bc ic m = map (\x -> (m!!x)!!(bc+ic*x)) [0..(length m)-1]
+path :: ModelInt -> ModelCol -> (ModelInt -> ModelInt) -> (ModelInt -> ModelInt) -> ModelCol
+path n l r c = slice l $ xmap (\k -> n*(r k)+(c k)) (0 @.. (n-1))
 
-interleave [] ys = ys
-interleave (x:xs) ys = x : (interleave ys xs)
+row :: ModelInt -> ModelCol -> ModelInt -> ModelCol
+row n l i = path n l (const i) id
 
-model n = do
+col :: ModelInt -> ModelCol -> ModelInt -> ModelCol
+col n l i = path n l id (const i)
+
+diag1 n l = path n l id id
+diag2 n l = path n l id (\x -> n-x-1)
+
+model :: ExampleModel ModelInt
+model n = exists $ \mat -> do
   let nn = n*n
-  let s = nn*(nn+1) `div` (2*n)
-  let sums = lsum $ cte s
-  m <- mexist n n
-  allin (concat m) (1,nn)
-  conj $ interleave (map sums m) (map sums $ transpose m)
-  sums $ diag 0 1 m
-  sums $ diag (n-1) (-1) m
-  allDiff $ concat m
-  (m!!0)!!0 @> (m!!0)!!(n-1)
-  (m!!0)!!0 @> (m!!(n-1))!!0
-  return $ concat m
+  let s = n*(nn+1) `div` 2
+  size mat @= n*n
+  loopall (0,n-1) $ \i -> do
+    xfold (+) (cte 0) (col n mat i) @= s
+    xfold (+) (cte 0) (row n mat i) @= s
+  xfold (+) (cte 0) (diag1 n mat) @= s
+  xfold (+) (cte 0) (diag2 n mat) @= s
+  mat `allin` (cte 1,nn)
+  allDiff mat
+  (mat @!! 0) @> (mat!(n-1))
+  (mat @!! 0) @> (mat!(n*n-n))
+  return mat
+
+main = example_sat_main_single_expr model

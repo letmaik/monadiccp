@@ -6,6 +6,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE BangPatterns #-}
 module Control.CP.Transformers (
   eval,
   eval',
@@ -32,15 +33,15 @@ eval tree q t  = debug "eval" $
                       eval' 0 tree q t es ts
 
 eval' :: SearchSig solver q t (ForResult t) 
-eval' i (Return x) wl t es ts  = do (j,xs) <- returnT (i+1) wl t es
-                                    return (j,(x:xs)) 
+eval' !i (Return x) wl t es ts  = do (j,xs) <- returnT (i+1) wl t es
+                                     return (j,(x:xs)) 
 eval' i (Add c k)  wl t es ts = do b <- Control.CP.Solver.add c 
                                    if b then eval' (i+1) k wl t es ts
                                         else continue (i+1) wl t es
 eval' i (NewVar f) wl t es ts = do v <- newvar
                                    eval' (i+1) (f v) wl t es ts
 eval' i (Try l r)  wl t es ts  = 
-  do now <- mark 
+  do now <- markn 2
      let wl' = pushQ (now,l,leftT t es ts) $ pushQ (now,r,rightT t es ts) wl
      continue (i+1) wl' t es
 eval' i Fail       wl t es ts  = continue (i+1) wl t es

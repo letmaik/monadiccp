@@ -21,6 +21,7 @@ module Control.CP.FD.OvertonFD.OvertonFD (
   fd_domain,
   FDVar,
   OConstraint(..),
+  lookup,
 ) where
 
 import Prelude hiding (lookup)
@@ -32,10 +33,10 @@ import Data.Map ((!), Map)
 import Control.Monad (liftM,(<=<))
 
 import Control.CP.FD.OvertonFD.Domain as Domain
-import Control.CP.FD.FD
-import Control.CP.EnumTerm
+import Control.CP.FD.FD hiding ((!))
 import Control.CP.Solver
 import Control.CP.SearchTree
+import Control.CP.EnumTerm
 
 import Control.CP.Debug
 
@@ -48,16 +49,18 @@ data OConstraint =
   | OSame FDVar FDVar
   | ODiff FDVar FDVar
   | OLess FDVar FDVar
+  | OLessEq FDVar FDVar
   | OAdd FDVar FDVar FDVar
   | OSub FDVar FDVar FDVar
   | OMult FDVar FDVar FDVar
   | OAbs FDVar FDVar
+  deriving (Show,Eq)
 
 instance Solver OvertonFD where
   type Constraint OvertonFD  = OConstraint
   type Label      OvertonFD  = FDState
-  add c  	= addFD c
-  run p   	= runFD p
+  add c  	= debug ("addOverton("++(show c)++")") $ addOverton c
+  run p   	= debug ("runOverton") $ runOverton p
   mark	= get
   goto	= put 
 
@@ -67,33 +70,23 @@ instance Term OvertonFD FDVar where
   help _ _ = ()
 
 instance EnumTerm OvertonFD FDVar where
-  type TermDomain OvertonFD FDVar = Int
-  get_domain_size v = do
-    dom <- debug "get_domain_size:fd_domain" $ fd_domain v
-    return $ length dom
-  split_domain_partial v = do
-    dom <- debug "split_domain:fd_domain" $ fd_domain v
-    case dom of
-      [] -> return [ return () ]
-      _ -> return [ addC $ v `OHasValue` c | c <- dom ]
-  get_value v = do
-    x <- debug "get_value:fd_domain" $ fd_domain v
-    case x of
-      [val] -> return $ Just val
-      _ -> return Nothing
+  type TermBaseType OvertonFD FDVar = Int
+  getDomain = fd_domain
+  setValue var val = return [var `OHasValue` val]
 
 --------------------------------------------------------------------------------
 -- Constraints -----------------------------------------------------------------
 --------------------------------------------------------------------------------
 
-addFD (OHasValue v i) = v `hasValue` i
-addFD (OSame a b) = a `same` b
-addFD (ODiff a b) = a `different` b
-addFD (OLess a b) = a .<. b
-addFD (OAdd a b c) = addSum a b c
-addFD (OSub a b c) = addSub a b c
-addFD (OMult a b c) = addMult a b c
-addFD (OAbs a b) = addAbs a b
+addOverton (OHasValue v i) = v `hasValue` i
+addOverton (OSame a b) = a `same` b
+addOverton (ODiff a b) = a `different` b
+addOverton (OLess a b) = a .<. b
+addOverton (OLessEq a b) = a .<=. b
+addOverton (OAdd a b c) = addSum a b c
+addOverton (OSub a b c) = addSub a b c
+addOverton (OMult a b c) = addMult a b c
+addOverton (OAbs a b) = addAbs a b
 
 fd_domain :: FDVar -> OvertonFD [Int]
 fd_domain v = do d <- lookup v
@@ -107,8 +100,8 @@ fd_objective =
 --------------------------------------------------------------------------------
 
 -- The FD monad
-newtype OvertonFD a = OvertonFD { unFD :: StateT FDState Maybe a }
-    deriving (Monad, MonadState FDState, MonadPlus)
+newtype OvertonFD a = OvertonFD { unFD :: State FDState a }
+    deriving (Monad, MonadState FDState)
 
 -- FD variables
 newtype FDVar = FDVar { unFDVar :: Int } deriving (Ord, Eq, Show)
@@ -140,9 +133,10 @@ consistentFD :: OvertonFD Bool
 consistentFD = return True
 
 -- Run the FD monad and produce a lazy list of possible solutions.
-runFD :: OvertonFD a -> a
-runFD fd = fromJust $ evalStateT (unFD fd') initState
-           where fd' = fd -- fd' = newVar () >> fd
+runOverton :: OvertonFD a -> a
+runOverton fd = 
+  let j = evalState (unFD fd) initState
+      in j
 
 initState :: FDState
 initState = FDState { varSupply = FDVar 0, varMap = Map.empty, objective = FDVar 0 }
@@ -267,6 +261,21 @@ infix 4 .<.
 	        else return False
         else return False
 
+-- Constrain one variable to have a value less than or equal to the value of another 
+-- variable.
+infix 4 .<=.
+(.<=.) :: FDVar -> FDVar -> OvertonFD Bool
+(.<=.) = addBinaryConstraint $ \x y -> do
+    xv <- lookup x
+    yv <- lookup y
+    let xv' = filterLessThan (1 + findMax yv) xv
+    let yv' = filterGreaterThan ((findMin xv) - 1) yv
+    if  not $ Domain.null xv'
+        then if not $ Domain.null yv'
+                then whenwhen (xv /= xv') (yv /= yv') (update x xv') (update y yv')
+	        else return False
+        else return False
+
 {-
 -- Get all solutions for a constraint without actually updating the
 -- constraint store.
@@ -352,7 +361,7 @@ addSub = addArithmeticConstraint getDomainMinus getDomainPlus (flip getDomainMin
 
 addMult = addArithmeticConstraint getDomainMult getDomainDiv getDomainDiv
 
-addAbs = addUnaryArithmeticConstraint (\x -> mapDomain x (\i -> [abs i])) (\z -> mapDomain z (\i -> [i,-i]))
+addAbs = addUnaryArithmeticConstraint absDomain (\z -> mapDomain z (\i -> [i,-i]))
 
 getDomainPlus :: Domain -> Domain -> Domain
 getDomainPlus xs ys = toDomain (zl, zh) where

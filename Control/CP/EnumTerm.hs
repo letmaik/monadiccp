@@ -1,102 +1,113 @@
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TransformListComp #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleContexts #-}
 
 module Control.CP.EnumTerm (
-  EnumTerm,
-  TermDomain,
-  get_domain_size,
-  get_value,
-  split_domain_partial,
-  split_domain,
-  split_domains,
-  in_order,
-  firstfail,
-  middleout,
-  endsout,
-  interleave,
-  assignment,
-  assignments,
-  enumerate,
-  label
+  EnumTerm(..),
+  assignment, assignments,
+  inOrder, firstFail, middleOut, endsOut,
+  labelling, levelList, enumerate
 ) where
 
 import GHC.Exts (sortWith)
 
-import Data.List (splitAt)
-import Control.CP.SearchTree hiding (label)
 import Control.CP.Solver
+import Control.CP.SearchTree
 
---------------------------------------------------------------------------------
--- ENUMERATION
---------------------------------------------------------------------------------
+class (Solver s, Term s t, Show (TermBaseType s t)) => EnumTerm s t where
+  type TermBaseType s t :: *
 
-class (Term s t, Enum (TermDomain s t)) => EnumTerm s t where
-	type TermDomain s t :: *
-	get_domain_size :: t -> s Int
-	get_value :: t -> s (Maybe (TermDomain s t))
-	split_domain_partial :: t -> s [Tree s ()]
-	
-	split_domain :: t -> s (Tree s ())
-	split_domain v = do
-	  let rec tree = do
-	        tree
-	        Label $ do
-	          x <- get_value v
-	          case x of
-	            Nothing -> split_domain v
-	            Just _ -> return $ return ()
-	  lst <- split_domain_partial v
-	  return $ levelList $ map rec lst
-	
-	split_domains :: [t] -> s (Tree s ())
-	split_domains [] = return $ return ()
-	split_domains [a] = split_domain a
-	split_domains (a:b) = do
-	  ta <- split_domain a
-	  tb <- split_domains b
-	  return $ ta /\ tb
-	
-	label :: ([t] -> s [t]) -> [t] -> Tree s ()
-	label o l = Label $ do
-	  x <- o l
-	  split_domains x
-	
-	enumerate :: [t] -> Tree s ()
-	enumerate l = label firstfail l
+  getDomainSize :: t -> s (Int)
+  getDomain :: t -> s [TermBaseType s t]
+  setValue :: t -> TermBaseType s t -> s [Constraint s]
+  splitDomain :: t -> s ([[Constraint s]],Bool)
+  splitDomains :: [t] -> s ([[Constraint s]],[t])
+  getValue :: t -> s (Maybe (TermBaseType s t))
+  defaultOrder :: [t] -> s [t]
+  enumerator :: (MonadTree m, TreeSolver m ~ s) => Maybe ([t] -> m ())
 
-levelList :: Solver s => [Tree s ()] -> Tree s ()
-levelList [] = Fail
-levelList [a] = a
-levelList l = 
-  let len = length l
-      (p1,p2) = splitAt (len `div` 2) l
-      in Try (levelList p1) (levelList p2)
+  getDomainSize x = do
+    r <- getDomain x
+    return $ length r
 
+  getValue x = do
+    d <- getDomain x
+    return $ case d of
+      [v] -> Just v
+      _ -> Nothing
+  splitDomain x = do
+    d <- getDomain x
+    case d of
+      [] ->  return ([],True)
+      [_] -> return ([[]],True)
+      _ ->   do
+        rr <- mapM (setValue x) d
+        return (rr,True)
 
-in_order :: Monad m => a -> m a
-in_order = return 
+  splitDomains [] = return ([[]],[])
+  splitDomains (a@(x:b)) = do
+    s <- getDomainSize x
+    if s==0
+      then return ([],[])
+      else if s==1 
+        then splitDomains b
+        else do
+          (r,v) <- splitDomain x
+          if v
+            then return (r,b)
+            else return (r,a)
 
-firstfail qs = do ds <- mapM get_domain_size qs 
+  defaultOrder = firstFail
+  enumerator = Nothing
+
+enumerate :: (MonadTree m, TreeSolver m ~ s, EnumTerm s t) => [t] -> m ()
+enumerate = case enumerator of
+  Nothing -> labelling defaultOrder
+  Just x -> x
+
+assignment :: (EnumTerm s t, MonadTree m, TreeSolver m ~ s) => t -> m (TermBaseType s t)
+assignment q = label $ getValue q >>= \y -> (case y of Just x -> return $ return x; _ -> return false)
+
+assignments :: (EnumTerm s t, MonadTree m, TreeSolver m ~ s) => [t] -> m [TermBaseType s t]
+assignments = mapM assignment
+
+firstFail :: EnumTerm s t => [t] -> s [t]
+firstFail qs = do ds <- mapM getDomainSize qs 
                   return [ q | (d,q) <- zip ds qs 
                              , then sortWith by d ]
 
-middleout l = let n = (length l) `div` 2 in
-              interleave (drop n l) (reverse $ take n l)
+inOrder :: EnumTerm s t => [t] -> s [t]
+inOrder = return
 
-endsout  l = let n = (length l) `div` 2 in
-              interleave (reverse $ drop n l) (take n l)
+middleOut :: EnumTerm s t => [t] -> s [t]
+middleOut l = let n = (length l) `div` 2 in
+              return $ interleave (drop n l) (reverse $ take n l)
+
+endsOut :: EnumTerm s t => [t] -> s [t]
+endsOut  l = let n = (length l) `div` 2 in
+             return $ interleave (reverse $ drop n l) (take n l)
 
 interleave []     ys = ys
 interleave (x:xs) ys = x:interleave ys xs
 
---------------------------------------------------------------------------------
--- RESULT
---------------------------------------------------------------------------------
+levelList :: (Solver s, MonadTree m, TreeSolver m ~ s) => [m ()] -> m ()
+levelList [] = false
+levelList [a] = a
+levelList l = 
+  let len = length l
+      (p1,p2) = splitAt (len `div` 2) l
+      in (levelList p1) \/ (levelList p2)
+--levelList [] = false
+--levelList [a] = a
+--levelList (a:b) = a \/ levelList b
 
-assignment ::  EnumTerm s t => t -> Tree s (TermDomain s t)
-assignment q = Label $ get_value q >>= \(Just x) -> return $ Return x
-
-assignments :: EnumTerm s t => [t] -> Tree s [TermDomain s t]
-assignments = mapM assignment
+labelling :: (MonadTree m, TreeSolver m ~ s, EnumTerm s t) => ([t] -> s [t]) -> [t] -> m ()
+labelling _ [] = true
+labelling o l = label $ do 
+  ll <- o l
+  (cl,c) <- splitDomains ll
+  let ml = map (\l -> foldr (/\) true $ map addC l) cl
+  return $ do
+    levelList ml
+    labelling return c

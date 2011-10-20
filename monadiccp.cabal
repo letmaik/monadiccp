@@ -1,5 +1,5 @@
 Name:			monadiccp
-Version:		0.6.1
+Version:		0.7.0
 Description:		Monadic Constraint Programming framework
 License:		BSD3
 License-file:		LICENSE
@@ -8,10 +8,10 @@ Maintainer:		tom.schrijvers@cs.kuleuven.be
 Build-Type:		Simple
 Category:		control
 Synopsis:		Constraint Programming
-Homepage:		http://www.cs.kuleuven.be/~toms/Haskell/
+Homepage:		http://www.cs.kuleuven.be/~toms/MCP/
 Bug-reports:		http://trac.haskell.org/monadiccp/
 Cabal-Version:		>=1.6
-Extra-Source-Files: 	examples/*.hs lib/gecodeglue.h
+Extra-Source-Files: 	examples/*.hs lib/*.cpp lib/*.h
 
 -- examples/Alpha.hs examples/Grocery.hs examples/MagicSquare.hs examples/Olympic.hs examples/Partition.hs examples/Queens.hs examples/Ring.hs examples/StressDomain.hs examples/TryDemo.hs examples/Zebra.hs
 
@@ -24,18 +24,49 @@ Flag Debug
     Default:		False
 
 library
-    Build-Depends:	base >= 2 && < 4, containers, mtl, haskell98, random
-    Exposed-Modules:	Control.CP.SearchTree Control.CP.Transformers Control.CP.FD.Gecode.Common Control.CP.FD.Gecode.Translate Control.CP.FD.Gecode.CodegenSolver Control.CP.FD.OvertonFD.Sugar Control.CP.FD.OvertonFD.OvertonFD Control.CP.FD.Solvers Control.CP.FD.FD Control.CP.FD.Example.Example Control.CP.FD.Expr Control.CP.Solver Control.CP.ComposableTransformers Control.CP.EnumTerm Control.CP.PriorityQueue Control.CP.Mixin Control.CP.Herbrand.PrologTerm Control.CP.Herbrand.Prolog Control.CP.Herbrand.Herbrand Control.CP.Herbrand.HerbrandT Control.CP.Queue
-    Other-Modules:	Control.CP.Debug Control.CP.FD.OvertonFD.Domain
+    Build-Depends:	base >= 2, base < 5, containers, mtl, haskell98, random, pretty, Monatron >= 0.3
+    Exposed-Modules:	Data.Expr.Sugar
+                        Control.CP.SearchTree
+                        Control.CP.Transformers
+                        Control.CP.ComposableTransformers
+                        Control.CP.Solver
+                        Control.CP.PriorityQueue
+                        Control.CP.Queue
+                        Control.CP.FD.Interface
+                        Control.CP.FD.OvertonFD.OvertonFD
+                        Control.CP.FD.OvertonFD.Sugar
+                        Control.CP.EnumTerm
+                        Control.CP.FD.Solvers
+                        Control.CP.FD.Gecode.CodegenSolver
+                        Control.CP.FD.Model
+                        Control.CP.FD.Example
+    Other-Modules:	Data.Expr.Data
+                        Data.Expr.Util
+                        Data.Linear
+                        Control.CP.FD.Gecode.Common
+                        Control.CP.FD.OvertonFD.Domain
+                        Control.CP.FD.SimpleFD
+                        Control.CP.FD.Graph
+                        Control.CP.FD.Decompose
+                        Control.CP.FD.FD
+                        Control.CP.Debug
+                        Control.Mixin.Mixin
+                        Control.CP.SearchSpec.Language
+                        Control.CP.SearchSpec.Generator
+                        Language.CPP.Syntax.AST
+                        Language.CPP.Pretty
+    GHC-Prof-Options:	-auto-all -caf-all
     Include-Dirs:	lib
     if flag(Debug)
         CPP-Options:	-DDEBUG
-        CC-Options:	"-O1" "-ggdb3"
+        CC-Options:	"-ggdb3" "-Wall"
     else
-        CC-Options:	"-O3" "-g0" "-DNDEBUG"
-    if flag(RuntimeGecode)
+        CC-Options:	"-g0" "-DNDEBUG" "-Wall"
+    if flag(runtimegecode)
         C-Sources:		lib/gecodeglue.cpp
         Extra-Libraries:	gecodesupport gecodeset gecodeint gecodekernel gecodesearch
-        Exposed-Modules:	Control.CP.FD.Gecode.RuntimeSolver
+        Exposed-Modules:	Control.CP.FD.Gecode.Runtime
+                                Control.CP.FD.Gecode.RuntimeSearch
         Other-Modules:		Control.CP.FD.Gecode.Interface
         CPP-Options:		-DRGECODE
+        Frameworks:		gecode

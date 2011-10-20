@@ -1,476 +1,1049 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 module Control.CP.FD.Gecode.CodegenSolver (
-  CodegenSolver(..),
-  compile,
-  Store(..),
-  StoreNode(..),
-  StoreNodeType(..),
-  getVarType,
-  isVarImplicit,
-  VarBound(..),
-  getAllBounds
+  generateGecode,
+  CodegenGecodeSolver,
+  CodegenGecodeOptions(..), setOptions,
 ) where
 
-import Maybe (fromMaybe,catMaybes,isJust,fromJust)
-import List (findIndex,find)
-import Data.Map hiding (map,filter)
+import Data.Char (ord,chr)
+import Data.Maybe (fromJust,isJust)
+import Data.Map (Map)
+import Data.Maybe (isNothing)
+import qualified Data.Map as Map
 
 import Control.Monad.State.Lazy
 import Control.Monad.Trans
-import Control.Monad.Cont
 
+import Language.CPP.Syntax.AST
+import Language.CPP.Pretty
 
-import Control.CP.SearchTree hiding (label)
-import Control.CP.Solver
-import Control.CP.FD.FD
-import Control.CP.FD.Expr
 import Control.CP.Debug
-import Control.CP.Mixin
-
+import Control.CP.Solver
+import Control.CP.SearchTree
+import Control.CP.EnumTerm
+import Control.CP.FD.FD
+import Data.Expr.Data
+import Data.Expr.Sugar
+-- import Control.CP.FD.Expr.Util
+import Control.CP.FD.Model
 import Control.CP.FD.Gecode.Common
+import Data.Linear
 
---------------------------------------------------------------------------------
--- | Helper functions
---------------------------------------------------------------------------------
+import Control.CP.SearchSpec.Generator as Generator
 
-repl l i v = case l of
-  [] -> [v]
-  a:ar -> if i==0
-          then v:ar
-	  else repl ar (i-1) v
+idx s c i = 
+  if i<0 
+    then error ("GC:CG idx("++s++"): i="++(show i)++"<0")
+    else if i>=length c
+      then error ("GC:CG idx("++s++"): i="++(show i)++">=(length c)="++(show $ c))
+      else c!!i
 
-revrepl l i v = repl l ((length l)-i-1) v
+data ColDef =
+    ColDefSize GecodeIntConst
+  | ColDefList [IntVar]
+  | ColDefCat ColVar ColVar
+--  | ColDefTake ColVar GecodeIntConst GecodeIntConst
+  | ColDefConstMap GecodeListConst (GecodeCIFn CodegenGecodeSolver)
+  deriving (Show)
 
-revget l i = l !! ((length l)-i-1)
+data IntParDef =
+    IntParDefExt Int
+  | IntParDefCPP CPPExpr
+  deriving (Show)
 
-dump n l = case l of
-  [] -> []
-  (a:b) -> if (n==0) then b else a:(dump (n-1) b)
+data ColParDef =
+    ColParDefExt Int
+  | ColParDefCPP CPPExpr
+  deriving (Show)
 
---------------------------------------------------------------------------------
--- | Gecode Solver instance declaration
---------------------------------------------------------------------------------
-instance Solver CodegenSolver where
-  type Constraint CodegenSolver = GConstraint
-  type Label CodegenSolver = Store
-  add   = addGecode
-  run   = runGecode  
-  mark  = get
-  goto  = put
+data CodegenGecodeState = CodegenGecodeState {
+  nIntVars :: Int,
+  nBoolVars :: Int,
+  nIntPars :: Int,
+  intPars :: [IntParDef],
+  nColPars :: Int,
+  colPars :: [ColParDef],
+  colVars :: [ColDef],
+  colList :: [GecodeColConst],
+  colListEnt :: Map GecodeColConst Int,
+  cons :: [GecodeConstraint CodegenGecodeSolver],
+  ret :: Maybe ColVar,
+  level :: Int,
+  parent :: Maybe CodegenGecodeState,
+  options :: CodegenGecodeOptions,
+  minVar :: Maybe IntVar
+} deriving (Show)
 
---------------------------------------------------------------------------------
--- | CodegenSolver terms
---------------------------------------------------------------------------------
 
-instance Term CodegenSolver IntTerm where
-  newvar = newVar False TypeInt >>= return . IntVar
-  type Help CodegenSolver IntTerm = ()
+data CodegenGecodeOptions = CodegenGecodeOptions {
+  noTrailing :: Bool,
+  noGenSearch :: Bool
+} deriving (Show)
+
+initOptions :: CodegenGecodeOptions
+initOptions = CodegenGecodeOptions {
+  noTrailing = False,
+  noGenSearch = False
+}
+
+initState :: CodegenGecodeState
+initState = CodegenGecodeState { 
+  nIntVars = 0,
+  nBoolVars = 0,
+  nIntPars = 0,
+  intPars = [],
+  nColPars = 0,
+  colPars = [],
+  colVars = [],
+  colList = [],
+  colListEnt = Map.empty,
+  cons = [],
+  ret = Nothing,
+  level = 0,
+  parent = Nothing,
+  options = initOptions,
+  minVar = Nothing
+}
+
+newIntParam :: CodegenGecodeSolver Int
+newIntParam = do
+  s <- get
+  let n = nIntPars s
+  let r = length $ intPars s
+  put $ s { nIntPars = n+1, intPars = (intPars s)++[IntParDefExt n] }
+  return r
+
+newColParam :: CodegenGecodeSolver Int
+newColParam = do
+  s <- get
+  let n = nColPars s
+  let r = length $ colPars s
+  put $ s { nColPars = n+1, colPars = (colPars s)++[ColParDefExt n] }
+  return r
+
+newtype CodegenGecodeSolver a = CodegenGecodeSolver { cgsState :: State CodegenGecodeState a }
+  deriving (Monad, MonadState CodegenGecodeState)
+
+instance Solver CodegenGecodeSolver where
+  type Constraint CodegenGecodeSolver = GecodeConstraint CodegenGecodeSolver
+  type Label CodegenGecodeSolver = ()
+  run p = evalState (cgsState p) initState
+  mark = return ()
+  goto s = error "returning to a previous state is not supported yet"
+  add c = do
+    s <- get
+    put $ s { cons = c:cons s }
+    return True
+
+setOptions :: (CodegenGecodeOptions -> CodegenGecodeOptions) -> CodegenGecodeSolver ()
+setOptions f = do
+  s <- get
+  put $ s { options = f $ options s }
+
+data IntVar = 
+    IntVar Int Int    -- IntVar level id
+  | IntVarIdx ColVar GecodeIntConst 
+  | IntVarCPP (CPPExpr -> CPPExpr)
+  | IntVarCond GecodeBoolConst IntVar IntVar
+  deriving (Eq,Ord,Show)
+data BoolVar = 
+    BoolVar Int Int   -- BoolVar level id
+  | BoolVarCPP (CPPExpr -> CPPExpr)
+  deriving (Eq,Ord,Show)
+data ColVar = ColVar Int Int  -- ColVar level id
+  deriving (Eq,Ord,Show)
+
+instance Eq (CPPExpr -> CPPExpr) where
+  a==b = a astThis == b astThis
+instance Ord (CPPExpr -> CPPExpr) where
+  compare a b = compare (a astThis) (b astThis)
+instance Show (CPPExpr -> CPPExpr) where
+  show a = show (a astThis)
+
+genVar :: String -> CodegenGecodeState -> String
+genVar s st = 
+  case level st of
+    0 -> s
+    l -> (s ++ show l)
+
+instance Term CodegenGecodeSolver IntVar where
+  newvar = do
+    s <- get
+    let ni = nIntVars s
+    put $ s { nIntVars = ni+1 }
+    return $ IntVar (level s) ni
+  type Help CodegenGecodeSolver IntVar = ()
   help _ _ = ()
 
-instance Term CodegenSolver BoolTerm where
-  newvar = newVar False TypeBool >>= return . BoolVar
-  type Help CodegenSolver BoolTerm = ()
+instance Term CodegenGecodeSolver BoolVar where
+  newvar = do
+    s <- get
+    let ni = nBoolVars s
+    put $ s { nBoolVars = ni+1 }
+    return $ BoolVar (level s) ni
+  type Help CodegenGecodeSolver BoolVar = ()
   help _ _ = ()
 
---------------------------------------------------------------------------------
--- | CodegenSolver monad definition 
---------------------------------------------------------------------------------
+defineCol :: ColDef -> CodegenGecodeSolver ColVar
+defineCol def = do
+    s <- get
+    let ni = length $ colVars s
+    put $ s { colVars = colVars s ++ [def] }
+    return $ ColVar (level s) ni
 
-newtype CodegenSolver a = CodegenSolver { state :: State Store a }
-  deriving (Monad, MonadState Store)
+colSize :: ColVar -> CodegenGecodeState -> GecodeIntConst
+colSize (cc@(ColVar l c)) s = 
+  if (level s == l)
+    then debug ("colSize (ColVar l="++(show l)++" c="++(show c)++")") $ case idx "colSize" (colVars s) c of
+      ColDefSize s -> s
+      ColDefList l -> Const $ toInteger $ length l
+      ColDefCat c1 c2 -> colSize c1 s + colSize c2 s
+--      ColDefTake _ _ s -> s
+    else colSize cc (fromJust $ parent s)
 
--- instance Show (CodegenSolver a) where
---   show c = show $ execState (state c) initState
+lstindex :: Eq a => [a] -> [a] -> Maybe Int
+lstindex [] _ = Just 0
+lstindex _ [] = Nothing
+lstindex r@(a:b) (c:d) | a==c = case lstindex b d of
+  Nothing -> lstindex r d
+  Just p -> Just $ p+1
+lstindex a (_:b) = lstindex a b
 
+registerList :: GecodeColConst -> (CodegenGecodeState -> CodegenGecodeState)
+registerList l state = case lookupList state l of
+  Nothing -> state { colListEnt = Map.insert l (length $ colList state) (colListEnt state), colList = (colList state) ++ [l] }
+  Just _ -> state
 
-type VarId = Int
-type LowerBound = Maybe Integer
-type UpperBound = Maybe Integer
+lookupList :: CodegenGecodeState -> GecodeColConst -> Maybe (Int,Int)
+lookupList s col = case Map.lookup col (colListEnt s) of
+  Nothing -> case parent s of
+    Nothing -> Nothing
+    Just p -> lookupList p col
+  Just r -> Just (level s,r)
 
-data VarBound = VarBound { varid :: VarId, lbound :: LowerBound, ubound :: UpperBound }
-  deriving (Show, Eq)
+instance GecodeSolver CodegenGecodeSolver where
+  type GecodeIntVar CodegenGecodeSolver = IntVar
+  type GecodeBoolVar CodegenGecodeSolver = BoolVar
+  type GecodeColVar CodegenGecodeSolver = ColVar
+  newInt_at c p = return $ IntVarIdx c p
+  newInt_cond c t f = return $ IntVarCond c t f
+  newCol_size s = defineCol $ ColDefSize s
+  newCol_list l = defineCol $ ColDefList l
+  newCol_cat c1 c2 = defineCol $ ColDefCat c1 c2
+--  newCol_take c p l = defineCol $ ColDefTake c p l
+  col_getSize c = do
+    state <- get
+    return $ colSize c state
+  col_regList (ColTerm _) = return ()
+  col_regList l = do
+    state <- get
+    put $ registerList l state
+  splitBoolDomain _ = error "cannot split run-time boolean domains"
+  splitIntDomain _ = error "cannot split run-time integer domains"
 
-type VarBoundMap         = Map VarId VarBound
-type VarBoundPropagator  = VarBoundMap -> [ VarBound ]
+class CompilableModel t where
+  specific_compile :: t -> CodegenGecodeSolver ()
 
---------------------------------------------------------------------------------
-{- |
-   StoreNode represents a node in the search tree.
-    * Each node adds new constraints and variables.
-    * A node is a leaf node or an internal node
- -}
-data StoreNode = 
-  StoreNode { cons :: [ GConstraint ]
-              -- ^ new constraints added in this node
-            , nbounds :: [ VarBoundPropagator ]
-              -- ^ new bound-generator functions in this node
-            , nvars :: [ Int ]
-              -- ^ id's of variables added in this node
-            , dis :: StoreNodeType
-              -- ^ either no children, or one left and one right child
-            }
+instance CompilableModel (CodegenGecodeSolver a) where
+  specific_compile x = x >> return ()
 
-data StoreNodeType = SNLeaf | SNIntl StoreNode StoreNode
-  deriving Show
+instance CompilableModel ((FDInstance (GecodeWrappedSolver CodegenGecodeSolver)) ModelCol) where
+  specific_compile x = unliftGC $ runFD $ do
+    res <- x
+    [GCTVar col] <- getColTerm [res] GCSVar
+    liftFD $ liftGC $ do
+      s <- get
+      put s { ret = Just col }
+    min <- getMinimizeTerm
+    liftFD $ liftGC $ do
+      s <- get
+      put s { minVar = min }
 
-instance Show StoreNode
-  where show sn = "StoreNode { cons=" ++ (show $ cons sn) ++ 
-                            ", nbounds=" ++ (show $ length $ nbounds sn) ++ 
-                            ", nvars=" ++ (show $ nvars sn) ++ 
-                            ", dus=" ++ (show $ dis sn) ++
-                            "}"
---------------------------------------------------------------------------------
+instance CompilableModel m => CompilableModel (ModelInt -> m) where
+  specific_compile x = do
+    n <- newIntParam
+    specific_compile $ x $ Term $ ModelIntPar n
 
-data VarData = VarData { vtype :: GType, vimpl :: Bool }
-  deriving Show
+instance CompilableModel m => CompilableModel (ModelCol -> m) where
+  specific_compile x = do
+    n <- newColParam
+    specific_compile $ x $ ColTerm $ ModelColPar n
 
-data Store = Store { vars :: Int, vardata :: [ VarData ], ctree :: StoreNode, cpath :: [ Bool ], cexpr :: Map (ExprKey (FDTerm CodegenSolver)) Int }
-  deriving Show
+buildState :: Solver s => Tree s a -> s a
+buildState (Add c v) = debug "cgs::buildState.Add" $ 
+                         do
+                           add c
+                           buildState v
+buildState (NewVar f) = debug "cgs::buildState.NewVar" $ 
+                          do
+                            v <- newvar
+                            buildState $ f v
+buildState (Try l r)  = debug "cgs::buildState.Try" $ buildState l
+buildState (Label m) = debug "cgs::buildState.Label" $ m >>= buildState
+buildState (Fail) = return $ error "Code generation for failed model"
+buildState (Return x) = return x
 
+instance CompilableModel (Tree (FDInstance (GecodeWrappedSolver CodegenGecodeSolver)) ModelCol) where
+  specific_compile = specific_compile . buildState
 
-setVarImplicitHelper :: Store -> Int -> Bool -> Store
-setVarImplicitHelper s p v = s { vardata = revrepl (vardata s) p ( (revget (vardata s) p) { vimpl = v } ) }
+getTopState :: (CodegenGecodeState -> a) -> (CodegenGecodeState -> a)
+getTopState f o = case parent o of
+  Just p -> getTopState f p
+  Nothing -> f o
 
-initNode = StoreNode { cons = [], dis = SNLeaf, nvars = [], nbounds=[] }
-initState = Store { vars=0, vardata=[], ctree=initNode, cpath=[], cexpr=empty }
+modTopState :: (CodegenGecodeState -> CodegenGecodeState) -> (CodegenGecodeState -> CodegenGecodeState)
+modTopState f o = case parent o of
+  Just p -> o { parent = Just $ modTopState f p }
+  Nothing -> f o
 
-addStateTree node path con vars bounds = case (dis node,path) of
-  (_,[]) -> node { cons = con++(cons node), nvars = vars++(nvars node), nbounds = bounds++(nbounds node) }
-  (SNLeaf,s:sr) -> node { dis = if s then SNIntl initNode (addStateTree initNode sr con vars bounds) 
-                                      else SNIntl (addStateTree initNode sr con vars bounds) initNode }
-  (SNIntl l r,s:sr) -> node { dis = if s then SNIntl l (addStateTree r sr con vars bounds) 
-                                         else SNIntl (addStateTree l sr con vars bounds) r }
+compile :: CompilableModel m => Bool -> m -> (CodegenGecodeSolver a) -> CodegenGecodeSolver a
+compile par x m = do
+  s <- get
+  case par of
+    False -> put $ initState { parent = Nothing, level = 0 }
+    True  -> put $ initState { parent = Just s,  level = 1 + level s, intPars = intPars s, colPars = colPars s }
+  specific_compile x
+  r <- m
+  ss <- get
+  case parent ss of
+    Nothing -> return ()
+    Just p  -> put p
+  return r
 
-addState store con vars bounds = store { ctree = addStateTree (ctree store) (cpath store) con vars bounds }
+retState :: MonadState s m => m a -> m (a,s)
+retState m = do
+  r <- m
+  s <- get
+  return (r,s)
 
-getConstraintsTree tree path = (cons tree) ++ case (dis tree,path) of
-  (SNLeaf,_) -> []
-  (SNIntl l _, False:s) -> getConstraintsTree l s
-  (SNIntl l _, [])      -> getConstraintsTree l []
-  (SNIntl _ r, True:s) -> getConstraintsTree r s
+astCompile m = compile True m (astPost >>= return . CPPCompound)
 
+astIncludes = [ "gecode/kernel.hh", "gecode/support.hh", "gecode/int.hh", "gecode/search.hh", "vector", "list" ]
 
-getConstraints state = getConstraintsTree (ctree state) (cpath state)
+astGenerate :: CodegenGecodeSolver [CPPFile]
+astGenerate = do
+  s <- get
+  tru <- astTranslUnit
+  mnu <- case noGenSearch $ options s of
+    False -> astMainUnitGen
+    True -> astMainUnitDef
+  return [
+    CPPFile {
+      cppMacroStm = [ CPPMacroIncludeUser x | x <- astIncludes ],
+      cppUsing = [ "Gecode", "std" ],
+      cppTranslUnit = tru
+    },
+    CPPFile {
+      cppMacroStm = [],
+      cppUsing = [],
+      cppTranslUnit = mnu
+    }
+   ]
 
---------------------------------------------------------------------------------
--- | CodegenSolver compilation
---------------------------------------------------------------------------------
+astTInt = CPPTypePrim "int"
+astTIV = CPPTypePrim "IntVar"
+astTIA = CPPTypePrim "IntArgs"
+astTIVA = CPPTypePrim "IntVarArgs"
+astTBV = CPPTypePrim "BoolVar"
+astTBVA = CPPTypePrim "BoolVarArgs"
 
-compile :: Tree CodegenSolver a -> Store
-compile x = execGecode (buildState x)
+astInt :: Integer -> CPPExpr
+astInt a = CPPConst $ CPPConstInt a
 
-execGecode :: CodegenSolver a -> Store
-execGecode x = execState (state x) initState
+astThis :: CPPExpr
+astThis = CPPUnary CPPOpInd $ CPPVar "this"
 
-buildState :: Tree CodegenSolver a -> CodegenSolver ()
-buildState (Add c v) = do add c
-                          buildState v
-buildState (NewVar f) = do v <- newvar
-                           buildState $ f v
-buildState (Try l r)  = do v1 <- get
-			   let opath = cpath v1
-			   let ocexpr = cexpr v1
-			   put $ v1 { cpath = opath ++ [ False ], cexpr = ocexpr }
-			   buildState l
-		           v2 <- get
-			   put $ v2 { cpath = opath ++ [ True ], cexpr = ocexpr }
-                           buildState r
-			   v3 <- get
-                           put $ v3 { cpath = opath, cexpr = ocexpr }
-buildState (Label m) = m >>= buildState
-buildState _          = return ()
+astLowerBound = astInt (-1000000000)
+astUpperBound = astInt (1000000000)
 
---------------------------------------------------------------------------------
--- | Bounds
---------------------------------------------------------------------------------
+astColSize :: ColVar -> CodegenGecodeState -> CPPExpr -> CPPExpr
+astColSize c state ctx = astIntExpr state ctx $ colSize c state
 
-data XInt = XInfMin | XInfPlus | XInt Integer
+astIntParam :: CodegenGecodeState -> CPPExpr -> GecodeIntParam -> CPPExpr
+astIntParam state ctx (GIParam n) | n<(-1000) = CPPVar $ "___parVar"++(show $ -(n+1000))++"___"
+astIntParam state ctx (GIParam i) = case (idx "astIntParam" (intPars state) i) of
+  IntParDefExt n -> CPPIndex (call ctx "iP") (astInt $ fromIntegral n)
+  IntParDefCPP c -> c
 
-toXInt isUpper Nothing = if isUpper then XInfPlus else XInfMin
-toXInt _ (Just i) = XInt i
+astBoolParam :: CodegenGecodeState -> CPPExpr -> GecodeBoolParam -> CPPExpr
+astBoolParam state ctx (GBParam i) = CPPIndex (call ctx "bP") (astInt $ fromIntegral i)
 
-bndMult (XInt a) (XInt b) _ _ = [XInt (a*b)]
-bndMult XInfMin XInfMin _ _ = [XInfPlus]
-bndMult XInfPlus XInfMin _ _ = [XInfMin]
-bndMult XInfPlus XInfPlus _ _ = [XInfPlus]
-bndMult (XInt a) XInfPlus la _
-  | a < 0 = [XInfMin]
-  | a > 0 =  [XInfPlus]
-  | a == 0 && la = [XInfPlus]
-  | a == 0 && not la = [XInfMin]
-bndMult (XInt a) XInfMin la _
-  | a < 0 = [XInfPlus]
-  | a > 0 =  [XInfMin]
-  | a == 0 && la = [XInfMin]
-  | a == 0 && not la = [XInfPlus]
-bndMult a b c d = bndMult b a d c
+astColParam :: CodegenGecodeState -> CPPExpr -> GecodeColParam -> CPPExpr
+astColParam state ctx (GCParam i) = case (idx "astColParam" (colPars state) i) of
+  ColParDefExt n -> CPPIndex (call ctx "cP") (astInt $ fromIntegral n)
+  ColParDefCPP c -> c 
 
-bndDiv _ _ _ _ = [XInfMin,XInfPlus]
+astBoolExpr :: CodegenGecodeState -> CPPExpr -> GecodeBoolConst -> CPPExpr
+astBoolExpr state ctx (BoolTerm par) = astBoolParam state ctx par
+astBoolExpr state ctx (BoolConst b) = astInt (if b then 1 else 0)
+astBoolExpr state ctx (BoolAnd a b) = CPPBinary (astBoolExpr state ctx a) CPPOpLAnd (astBoolExpr state ctx b)
+astBoolExpr state ctx (BoolOr a b) = CPPBinary (astBoolExpr state ctx a) CPPOpLOr (astBoolExpr state ctx b)
+astBoolExpr state ctx (BoolNot a) = CPPUnary CPPOpNeg (astBoolExpr state ctx a)
+astBoolExpr state ctx (Rel a EREqual b) = CPPBinary (astIntExpr state ctx a) CPPOpEq (astIntExpr state ctx b)
+astBoolExpr state ctx (Rel a ERDiff b) = CPPBinary (astIntExpr state ctx a) CPPOpNeq (astIntExpr state ctx b)
+astBoolExpr state ctx (Rel a ERLess b) = CPPBinary (astIntExpr state ctx a) CPPOpLe (astIntExpr state ctx b)
+astBoolExpr state ctx (BoolEqual a b) = CPPBinary (astBoolExpr state ctx a) CPPOpEq (astBoolExpr state ctx b)
+astBoolExpr state ctx (BoolCond c t f) = CPPCond (astBoolExpr state ctx c) (Just $ astBoolExpr state ctx t) (astBoolExpr state ctx f)
+astBoolExpr state ctx x = error $ "astBoolExpr(" ++ (show x) ++ ")"
 
-boundFn f v1 v2 l1 l2 = f (toXInt l1 v1) (toXInt l2 v2) l1 l2
+astColExpr :: CodegenGecodeState -> CPPExpr -> GecodeColConst -> GecodeIntConst -> CPPExpr
+astColExpr state ctx (ColTerm par) pos = CPPIndex (astColParam state ctx par) (astIntExpr state ctx pos)
+astColExpr state ctx (ColList lst) (Const pos) = astIntExpr state ctx (lst!!(fromInteger pos))
+astColExpr state ctx c p = case lookupList state c of
+  Nothing -> error $ "Unregistered constant list used: " ++ (show c)
+  Just (l,n) -> CPPIndex (CPPVar ("cte" ++ show l ++ "_" ++ show n)) (astIntExpr state ctx p)
+astIntExpr :: CodegenGecodeState -> CPPExpr -> GecodeIntConst -> CPPExpr
+astIntExpr state ctx (Term par) = astIntParam state ctx par
+astIntExpr state _ (Const i) = astInt i
+astIntExpr state ctx (Plus a b) = CPPBinary (astIntExpr state ctx a) CPPOpAdd (astIntExpr state ctx b)
+astIntExpr state ctx (Minus a b) = CPPBinary (astIntExpr state ctx a) CPPOpSub (astIntExpr state ctx b)
+astIntExpr state ctx (Mult a b) = CPPBinary (astIntExpr state ctx a) CPPOpMul (astIntExpr state ctx b)
+astIntExpr state ctx (Div a b) = CPPBinary (astIntExpr state ctx a) CPPOpDiv (astIntExpr state ctx b)
+astIntExpr state ctx (Mod a b) = CPPBinary (astIntExpr state ctx a) CPPOpRmd (astIntExpr state ctx b)
+astIntExpr state ctx (Abs a) = CPPCall (CPPVar "abs") [astIntExpr state ctx a]
+astIntExpr state ctx (At c a) = astColExpr state ctx c a
+astIntExpr state ctx (ColSize (ColTerm (GCParam i))) = CPPIndex (call ctx "cPs") (astInt $ toInteger i)
+astIntExpr state ctx (Channel b) = astBoolExpr state ctx b
+astIntExpr state ctx (Cond c a b) = CPPCond (astBoolExpr state ctx c) (Just $ astIntExpr state ctx a) (astIntExpr state ctx b)
 
-lowestBound :: [XInt] -> XInt
-lowestBound = foldl1 m 
-  where m XInfMin _ = XInfMin
-        m _ XInfMin = XInfMin
-        m (XInt a) (XInt b) = XInt $ min a b
-        m (XInt a) _ = XInt a
-        m _ (XInt a) = XInt a
-        m XInfPlus XInfPlus = XInfPlus
+astDecl :: String -> CPPType -> CPPDecl
+astDecl name typ = CPPDecl { cppDeclName=Just name, cppType=typ, cppTypeQual=[], cppTypeStor=[], cppDeclInit=Nothing }
+astDeclEq :: String -> CPPType -> CPPExpr -> CPPDecl
+astDeclEq name typ val = CPPDecl { cppDeclName=Just name, cppType=typ, cppTypeQual=[], cppTypeStor=[], cppDeclInit=Just $ CPPInitValue val }
+astDeclEqA :: String -> CPPType -> [CPPExpr] -> CPPDecl
+astDeclEqA name typ val = CPPDecl { cppDeclName=Just name, cppType=typ, cppTypeQual=[], cppTypeStor=[], cppDeclInit=Just $ CPPInitArray val }
+astDeclFn :: String -> CPPType -> [CPPExpr] -> CPPDecl
+astDeclFn name typ val = CPPDecl { cppDeclName=Just name, cppType=typ, cppTypeQual=[], cppTypeStor=[], cppDeclInit=Just $ CPPInitCall val }
 
-highestBound :: [XInt] -> XInt
-highestBound = foldl1 m 
-  where m XInfPlus _ = XInfPlus
-        m _ XInfPlus = XInfPlus
-        m (XInt a) (XInt b) = XInt $ max a b
-        m (XInt a) _ = XInt a
-        m _ (XInt a) = XInt a
-        m XInfMin XInfMin = XInfMin
+call :: CPPExpr -> String -> CPPExpr
+call (CPPUnary CPPOpInd (CPPVar "this")) f = CPPVar f
+call (CPPUnary CPPOpInd x) f = CPPMember x f True
+call x f = CPPMember x f False
 
-boundRelation f (i1,i2,o) b = 
-  let (i1l,i1u) = getBounds b i1
-      (i2l,i2u) = getBounds b i2
-      bns = foldl1 (++) $ map (\(a,b,c,d) -> boundFn f a b c d) 
-        [(i1l,i2l,False,False)
-        ,(i1l,i2u,False,True)
-        ,(i1u,i2l,True,False)
-        ,(i1u,i2u,True,True)
-        ]
-      xl = lowestBound bns
-      xu = highestBound bns
-      fromXInt XInfPlus = Nothing
-      fromXInt XInfMin = Nothing
-      fromXInt (XInt a) = Just a
-      in case (xl,xu) of
-        (XInfPlus,_) -> []
-        (_,XInfMin) -> []
-        (_,_) -> [VarBound { varid = o, lbound = fromXInt xl, ubound = fromXInt xu }]
+instance Num CPPExpr where
+  a + b = CPPBinary a CPPOpAdd b
+  a * b = CPPBinary a CPPOpMul b
+  a - b = CPPBinary a CPPOpSub b
+  negate a = CPPUnary CPPOpMinus a
+  abs a = CPPCall (CPPVar "abs") [a]
+  signum a = CPPCall (CPPVar "signum") [a]
+  fromInteger a = astInt a
 
-catPropagators p = foldl1 (\a b -> \x -> (a x) ++ (b x)) p
+astLinOperator GOEqual     _     = CPPVar "IRT_EQ"
+astLinOperator GODiff      _     = CPPVar "IRT_NQ"
+astLinOperator GOLess      False = CPPVar "IRT_LE"
+astLinOperator GOLess      True  = CPPVar "IRT_GR"
+astLinOperator GOLessEqual False = CPPVar "IRT_LQ"
+astLinOperator GOLessEqual True  = CPPVar "IRT_GQ"
 
-linearPropagator l p c = \b -> 
-  let (IntVar i,cc) = l !! p
-      (low,high) = foldl 
-        (\x y -> case (x,y) of
-          ((Just l1,Just h1),(Just l2,Just h2)) -> (Just (l1-h2),Just (h1-l2))
-          ((Nothing,Just h1),(Just l2,_)) -> (Nothing,Just (h1-l2))
-          ((_,Just h1),(Just l2,Nothing)) -> (Nothing,Just (h1-l2))
-          ((Just l1,Nothing),(_,Just h2)) -> (Just (l1-h2),Nothing)
-          ( (Just l1,_),(Nothing,Just h2)) -> (Just (l1-h2),Nothing)
-          _ -> (Nothing,Nothing)
-        ) (Just c,Just c) cbounds
-      cbounds = map 
-        (\x -> case x of 
-          (c,(Just l,Just h)) -> if c<0 then (Just (c*h),Just (c*l)) else (Just (c*l),Just (c*h))
-          (c,(Nothing,Just h)) -> if c<0 then (Just (c*h),Nothing) else (Nothing,Just (c*h))
-          (c,(Just l,Nothing)) -> if c<0 then (Nothing,Just (c*l)) else (Just (c*l),Nothing)
-          _ -> (Nothing,Nothing)
-        ) dbounds
-      dbounds = dump p bounds
-      bounds = map (\(IntVar v,c) -> {- debug ("var "++(show v)++" is in "++(show $ getBounds b v)) $ -} (c,getBounds b v)) l
-  in (i,cc,low,high)
+astReifList _ _ Nothing = []
+astReifList state ctx (Just b) = [astBoolVar state ctx b]
 
-linearEqPropagator ll p c = \b -> case linearPropagator ll p c b of
-  (_,0,_,_) -> []
-  (i,cc,Just l,Just h) -> {- debug ("["++(if l>h then "AAAARGH! " else "")++(show ll)++"="++(show c)++"/"++(show cc)++"->["++(show p)++"]: var "++(show i)++" in ["++(show l)++".."++(show h)++"]]\n") $ -} if (cc<0) 
-  			     then let x=[ VarBound i (Just ((-h) `div` (-cc))) (Just (l `div` cc)) ] in {- debug (show x) -} x
-  			     else let x=[ VarBound i (Just ((-l) `div` (-cc))) (Just (h `div` cc)) ] in {- debug (show x) -} x
-  (i,cc,Nothing,Just h) -> {- debug ("["++(show ll)++"="++(show c)++"/"++(show cc)++"->["++(show p)++"]: var "++(show i)++" in [.."++(show h)++"]]\n") $ -} if (cc<0) 
-  			      then let x=[ VarBound i (Just ((-h) `div` (-cc))) Nothing ] in {- debug (show x) -} x
-  			      else let x=[ VarBound i Nothing (Just (h `div` cc)) ] in {- debug (show x) -} x
-  (i,cc,Just l,Nothing) -> {- debug ("["++(show ll)++"="++(show c)++"/"++(show cc)++"->["++(show p)++"]: var "++(show i)++" in ["++(show l)++"..]]\n") $ -} if (cc<0) 
-  			      then let x=[ VarBound i Nothing (Just (l `div` cc)) ] in {- debug (show x) -} x
-  			      else let x=[ VarBound i (Just ((-l) `div` (-cc))) Nothing ] in {- debug (show x) -} x
-  (i,cc,_,_) -> {- debug ("["++(show ll)++"="++(show c)++"/"++(show cc)++"->["++(show p)++"]: var "++(show i)++" in [..]]\n") $ -} []
+varName s l n = s ++ (if l==0 then "" else show l) ++ "_" ++ (show n)
+boolVarName (BoolVar l n) = varName "bV" l n
+colVarName (ColVar l n) = varName "cV" l n
+intVarName (IntVar l n) = varName "iV" l n
 
-linearLessPropagator l p c = \b -> case (linearPropagator l p c b) of
-  (_,0,_,_) -> []
-  (i,cc,_,Just h) -> if (cc<0) 
-  			then [ VarBound i (Just ((1-h) `div` (-cc))) Nothing ]
-  			else [ VarBound i Nothing (Just ((h-1) `div` cc)) ]
-  _ -> []
+astBoolVar state ctx (BoolVarCPP f) = f ctx
+astBoolVar state ctx (v@(BoolVar l _)) | (l < level state) = astBoolVar (fromJust $ parent state) ctx v
+astBoolVar state ctx b = CPPVar $ boolVarName b
+astIntVar state ctx (IntVarCond c t f) = CPPCond (astBoolExpr state ctx c) (Just $ astIntVar state ctx t) (astIntVar state ctx f)
+astIntVar state ctx (IntVarCPP f) = f ctx
+astIntVar state ctx (IntVarIdx c p) = CPPIndex (astColVar state ctx c) (astIntExpr state ctx p)
+astIntVar state ctx (v@(IntVar l _)) | (l < level state) = astIntVar (fromJust $ parent state) ctx v
+astIntVar state ctx i = CPPVar $ intVarName i
+astColVar state ctx (ColVar 0 r) | (ret state == Just (ColVar 0 r)) = call ctx "ret"
+astColVar state ctx (v@(ColVar l _)) | (l < level state) = astColVar (fromJust $ parent state) ctx v
+astColVar state ctx c = CPPVar $ (colVarName c)
 
-debugBoundsPropagator :: GConstraint -> VarBoundPropagator
-debugBoundsPropagator c = let cc = boundsPropagator c in
-  \b -> let ccc = cc b in {- debug ("debugBounds: "++(show c)++" -> "++(show ccc)) -} ccc
+astLinearConstraint state ctx l o reif = 
+  let (c,ll) = linearToListEx l
+      in case (c,ll,o) of
+        ((Const 0),[],_) -> CPPSimple $ CPPVar ("/* empty linear */")
+        ((Const 0),[(i1,a),(i2,b)],_) | a==(-b) && a>0 -> CPPSimple $ CPPCall (CPPVar "rel") $ [ctx,astIntVar state ctx i1,astLinOperator o False,astIntVar state ctx i2] ++ astReifList state ctx reif
+        ((Const 0),[(i2,a),(i1,b)],_) | a==(-b) && b>0 -> CPPSimple $ CPPCall (CPPVar "rel") $ [ctx,astIntVar state ctx i1,astLinOperator o False,astIntVar state ctx i2] ++ astReifList state ctx reif
+        ((Const cc),[(i,(Const ff))],GOEqual) | (cc `mod` ff)==0 -> CPPSimple $ CPPCall (CPPVar "rel") $ [ctx,astIntVar state ctx i,CPPVar "IRT_EQ",astInt $ -cc `div` ff] ++ astReifList state ctx reif
+        (c,[(i,Const 1)],rel) -> CPPSimple $ CPPCall (CPPVar "rel") $ [ctx,astIntVar state ctx i,astLinOperator o False,astIntExpr state ctx $ -c] ++ astReifList state ctx reif
+        (c,[(i,Const (-1))],rel) -> CPPSimple $ CPPCall (CPPVar "rel") $ [ctx,astIntVar state ctx i,astLinOperator o True,astIntExpr state ctx $ c] ++ astReifList state ctx reif
+        _ -> astTempList state (Just $ map snd ll) (Just $ map fst ll) Nothing ctx $ \ia iva _ -> [CPPSimple $ CPPCall (CPPVar "linear") $ [ctx,ia,iva,astLinOperator o False,astIntExpr state ctx $ -c] ++ astReifList state ctx reif]
 
-boundsPropagator :: GConstraint -> VarBoundPropagator
-boundsPropagator c = case c of
-  CValue (IntVar i) v -> (\_ -> [ VarBound i (Just v) (Just v) ])
-  CDom (IntVar i) l u -> (\_ -> [ VarBound i (Just l) (Just u) ])
-  CRel (IntVar i) OLess (IntVar j) -> \b ->
-    let (jbl,jbu) = getBounds b j
-        (ibl,ibu) = getBounds b i
-        in catMaybes [ if isJust jbu then Just $ VarBound i Nothing (Just $ (fromJust jbu)-1) else Nothing,
-                       if isJust ibl then Just $ VarBound j (Just $ (fromJust ibl)+1) Nothing else Nothing
-                     ]
-  CRel (IntVar i) OEqual (IntVar j) -> \b ->
-    let (jbl,jbu) = getBounds b j
-        (ibl,ibu) = getBounds b i
-        in [ VarBound i jbl jbu, VarBound j ibl ibu ]
-  CRel (IntVar i) OEqual (IntConst c) -> boundsPropagator $ CValue (IntVar i) c
-  CRel (IntConst c) OEqual (IntVar i) -> boundsPropagator $ CValue (IntVar i) c
-  CRel (IntVar i) OLess (IntConst c) -> (\_ -> [ VarBound i Nothing (Just (c-1)) ])
-  CRel (IntConst c) OLess (IntVar i) -> (\_ -> [ VarBound i (Just (c+1)) Nothing ])
-  CLinear [(IntVar i,f)] OEqual c | (c `mod` f)==0 -> boundsPropagator $ CValue (IntVar i) (c `div` f)
-  CLinear l OEqual c -> catPropagators $ map (\p -> linearEqPropagator l p c) [0..((length l)-1)]
-  CLinear l OLess c -> catPropagators $ map (\p -> linearLessPropagator l p c) [0..((length l)-1)]
-  CMult (IntVar f1) (IntVar f2) (IntVar m) -> catPropagators
-    [ boundRelation bndMult (f1,f2,m)
-    , boundRelation bndDiv (m,f1,f2)
-    , boundRelation bndDiv (m,f2,f1)
+astTempList :: CodegenGecodeState -> Maybe [GecodeIntConst] -> Maybe [IntVar] -> Maybe [BoolVar] -> CPPExpr -> (CPPExpr -> CPPExpr -> CPPExpr -> [CPPStat]) -> CPPStat
+astTempList state i iv bv ctx f = CPPCompound $ 
+  (
+    (case i of Just ii -> [ CPPBlockDecl $ astDeclFn "ia" astTIA $ (astInt $ toInteger $ length ii) : [astIntExpr state ctx x | x <- ii] ]; _ -> []) ++ 
+    (case iv of Just iiv -> [ CPPBlockDecl $ astDeclFn "iva" astTIVA $ [astInt $ toInteger $ length iiv] ] ++ [ CPPStatement $ CPPSimple $ CPPAssign (CPPIndex (CPPVar "iva") (astInt i)) CPPAssOp (astIntVar state ctx x) | (i,x) <- zip [0..] iiv ]; _ -> []) ++
+    (case bv of Just ibv -> [ CPPBlockDecl $ astDeclFn "bva" astTBVA $ [astInt $ toInteger $ length ibv] ] ++ [ CPPStatement $ CPPSimple $ CPPAssign (CPPIndex (CPPVar "bva") (astInt i)) CPPAssOp (astBoolVar state ctx x) | (i,x) <- zip [0..] ibv ]; _ -> []) ++
+    (map (CPPStatement) $ f (CPPVar "ia") (CPPVar "iva") (CPPVar "bva"))
+  )
+
+astTempSet state (num,fun) ctx f = CPPCompound $
+  (
+    [
+      CPPBlockDecl $ astDeclFn "ia" astTIA [astIntExpr state ctx num],
+      CPPStatement $ CPPFor (Right $ astDeclEq "asi" astTInt $ astInt 0) (Just $ CPPBinary (CPPVar "asi") CPPOpLe $ astIntExpr state ctx num) (Just $ CPPUnary CPPOpPostInc $ CPPVar "asi") $
+        CPPSimple $ CPPAssign (CPPIndex (CPPVar "ia") (CPPVar "asi")) CPPAssOp (withPar (IntParDefCPP $ CPPVar "asi") state $ \state par -> astIntExpr state ctx $ fun (Term par)),
+      CPPBlockDecl $ astDeclFn "is" (CPPTypePrim "IntSet") [CPPVar "ia"]
     ]
-  CAbs (IntVar v1) (IntVar v2) -> \b ->
-    let (v1l,v1h) = getBounds b v1
-        (v2l,v2h) = getBounds b v2
-        in [ case v2h of
-               Nothing -> VarBound v1 Nothing Nothing
-               Just h -> VarBound v1 (Just (-h)) (Just h)
-           , case (v1l,v1h) of
-               (Nothing,Nothing) -> VarBound v2 (Just 0) (Nothing)
-               (Just l,Nothing) | l<0 -> VarBound v2 (Just 0) Nothing
-               (Nothing,Just h) | h>0 -> VarBound v2 (Just 0) Nothing
-               (Just l,Nothing) | l>=0 -> VarBound v2 (Just l) Nothing
-               (Nothing,Just h) | h<=0 -> VarBound v2 (Just (-h)) Nothing
-               (Just l,Just h) | l<=0 && h>=0 -> VarBound v2 (Just 0) (Just ((-l) `max` h))
-               (Just l,Just h) | h<0 -> VarBound v2 (Just (-h)) (Just (-l))
-               (Just l,Just h) | l>0 -> VarBound v2 (Just l) (Just h)
-           ]
-  _ -> (\_ -> [])
+  ) ++ (map CPPStatement $ f $ CPPVar "is")
 
--- Combination
-propagateVarBounds :: [ VarBoundPropagator ] -> VarBoundMap -> VarBoundMap
-propagateVarBounds propagators vbmap  = fixP propagators vbmap
-  where
-   fixP :: [VarBoundPropagator] -> VarBoundMap -> VarBoundMap 
-   fixP []     src  = src
-   fixP (p:ps) src  = case propagate p src of
-                        Nothing   -> fixP ps          src
-                        Just src' -> fixP propagators src'
-   propagate p src  = 
-     either (const Nothing) Just $ foldl combine (Left src) (p src)
-     where combine prev vb  = prev `fromMaybe` (intersectBound vb src >>= return . Right) 
-                            where src = either id id prev
+astTempSetConst state lst ctx f = CPPCompound $
+  (
+    [ CPPBlockDecl $ astDeclEqA "ia" (CPPArray [] astTInt $ Just $ astInt $ toInteger $ length lst) [astInt x | x <- lst],
+      CPPBlockDecl $ astDeclFn "is" (CPPTypePrim "IntSet") [CPPVar "ia"]
+    ]
+  ) ++ (map CPPStatement $ f $ CPPVar "is")
 
--- add a new bound to a bounds map - returns Nothing if map remains unchanged, Just <newmap> otherwise
-intersectBound :: VarBound -> VarBoundMap -> Maybe VarBoundMap
-intersectBound nw k 
-   | oldValue == newValue = Nothing
-   | otherwise            = Just result
-    where 
-     (oldValue,result) = insertLookupWithKey (\k n o -> n) (varid nw) (fromJust newValue) k
-     newValue = 
-       (do ov <- oldValue
-           return $ adj ov
-       ) `orElse` (Just nw)
-     adj fnd@(VarBound {lbound = olb, ubound = oub}) = nb
-       where
-          nlb = newmax 1    olb $ lbound nw
-          nub = newmax (-1) oub $ ubound nw
-          nb = fnd { lbound = nlb, ubound = nub }
-          newmax f b1 b2 = 
-            (do x <- b1
-                y <- b2
-                return $ ((f*x) `max` (f*y)) `div` f
-            ) `orElse` b1 `orElse` b2
+astParTempList :: CodegenGecodeState -> GecodeListConst -> CPPExpr -> (CPPExpr -> [CPPStat]) -> CPPStat
+astParTempList state (num,fun) ctx f = CPPCompound $
+  (
+    [
+      CPPBlockDecl $ astDeclFn "ia" astTIA [astIntExpr state ctx num],
+      CPPStatement $ CPPFor (Right $ astDeclEq "asi" astTInt $ astInt 0) (Just $ CPPBinary (CPPVar "asi") CPPOpLe $ astIntExpr state ctx num) (Just $ CPPUnary CPPOpPostInc $ CPPVar "asi") $
+        CPPSimple $ CPPAssign (CPPIndex (CPPVar "ia") (CPPVar "asi")) CPPAssOp (withPar (IntParDefCPP $ CPPVar "asi") state $ \state par -> astIntExpr state ctx $ fun (Term par))
+    ]
+  ) ++ (map CPPStatement $ f $ CPPVar "ia")
 
-unionBounds :: VarBoundMap -> VarBoundMap -> VarBoundMap
-unionBounds = unionWith unioner
-  where unioner (VarBound i1 l1 u1) (VarBound i2 l2 u2) = VarBound i1 (newmax (-1) l1 l2) (newmax 1 u1 u2)
-        newmax f b1 b2 = 
-          do x <- b1
-             y <- b2
-             return  $ ((f*x) `max` (f*y)) `div` f
+astSection :: CodegenGecodeState -> GecodeColVarOrSection CodegenGecodeSolver -> CPPExpr -> (CPPExpr -> CPPExpr -> [CPPBlockItem]) -> CPPStat
+astSection state (Left var) ctx f = CPPCompound $ f (astColVar state ctx var) (astColSize var state ctx)
+astSection state (Right (var,(nn,ff))) ctx f = CPPCompound $
+    [ CPPBlockDecl $ astDeclFn "as" astTIVA [astIntExpr state ctx nn],
+      CPPStatement $ CPPFor (Right $ astDeclEq "asi" astTInt $ astInt 0) (Just $ CPPBinary (CPPVar "asi") CPPOpLe $ astIntExpr state ctx nn) (Just $ CPPUnary CPPOpPostInc $ CPPVar "asi") $
+        CPPSimple $ CPPAssign (CPPIndex (CPPVar "as") (CPPVar "asi")) CPPAssOp (CPPIndex (astColVar state ctx var) (withPar (IntParDefCPP $ CPPVar "asi") state $ \state par -> astIntExpr state ctx $ ff (Term par)))
+    ] ++ f (CPPVar "as") (astIntExpr state ctx nn)
 
-getBounds :: VarBoundMap -> VarId -> (LowerBound, UpperBound)
-getBounds b v = 
-  let bnd = case Data.Map.lookup v b of
-        Nothing -> (Nothing,Nothing)
-        Just k  -> (lbound k,ubound k)
-      in {- debug ("v"++(show v)++": "++(show bnd)) -} bnd
-
-getNodeBounds :: StoreNode -> [ Bool ] -> [ VarBoundPropagator ] -> [ VarId ] -> [VarBoundMap]
-getNodeBounds node path bnds vars = 
-  let nvrs   = nvars   node ++ vars
-      nbnds  = nbounds node ++ bnds
-  in case dis node of
-        SNLeaf -> [ propagateVarBounds nbnds $ fromList $ map (\x -> (x,VarBound x Nothing Nothing)) nvrs ]
-        SNIntl l r -> case path of
-          []   -> (getNodeBounds l [] nbnds nvrs) ++ (getNodeBounds r [] nbnds nvrs)
-          x:rp -> getNodeBounds (if x then r else l) rp nbnds nvrs
-
-
-getPathBounds :: Store -> [Bool] -> VarBoundMap
-getPathBounds s p = foldl (flip unionBounds) empty (getNodeBounds (ctree s) p [] [])
-
-getAllBounds s = getPathBounds s []
-getCurBounds s = getPathBounds s (cpath s)
-
---------------------------------------------------------------------------------
--- | CodegenSolver solver implementation
---------------------------------------------------------------------------------
-
-addGecode c = do
+astSectionM :: GecodeColVarOrSection CodegenGecodeSolver -> CPPExpr -> (CPPExpr -> CPPExpr -> CodegenGecodeSolver [CPPBlockItem]) -> CodegenGecodeSolver CPPStat
+astSectionM (Left var) ctx m = do
   s <- get
-  put $ addState s [c] [] [boundsPropagator c]
-  return True
-
-newVar :: Bool -> GType -> CodegenSolver Int
-newVar impl tp = do
+  r <- m (astColVar s ctx var) (astColSize var s ctx)
+  return $ CPPCompound r
+astSectionM (Right (var,(nn,ff))) ctx f = do
   s <- get
-  let vn = vars s
-  put $ addState (s { vars = vn + 1, vardata = (VarData { vtype=tp, vimpl=impl }) : (vardata s) }) [] [vn] []
-  return $ vn
+  r <- f (CPPVar "as") (astIntExpr s ctx nn)
+  return $ CPPCompound $
+    [ CPPBlockDecl $ astDeclFn "as" astTIVA [astIntExpr s ctx nn],
+      CPPStatement $ CPPFor (Right $ astDeclEq "asi" astTInt $ astInt 0) (Just $ CPPBinary (CPPVar "asi") CPPOpLe $ astIntExpr s ctx nn) (Just $ CPPUnary CPPOpPostInc $ CPPVar "asi") $
+        CPPSimple $ CPPAssign (CPPIndex (CPPVar "as") (CPPVar "asi")) CPPAssOp (CPPIndex (astColVar s ctx var) (withPar (IntParDefCPP $ CPPVar "asi") s $ \state par -> astIntExpr state ctx $ ff (Term par)))
+    ] ++ r
 
-runGecode :: CodegenSolver p -> p
-runGecode x = evalState (state x) initState
+astMCPTypeName state = "MCPProgram"
+astMCPType = CPPTypePrim . astMCPTypeName
 
---------------------------------------------------------------------------------
--- | CodegenSolver FDSolver instance
---------------------------------------------------------------------------------
+withPar pardef state f =
+  let l = length $ intPars state
+      ss = state { intPars = (intPars state)++[pardef] }
+      in f ss (GIParam l)
 
-instance GecodeSolver CodegenSolver where
-  caching_decompose super this x = Label $ do
-    s <- get
-    let wx = ExprKey x
-    case Data.Map.lookup wx (cexpr s) of
-      Nothing -> return $ do
-        n@(IntVar i) <- super x
-        Label $ do
-          s <- get
-          put $ s { cexpr = insert wx i $ cexpr s }
-          return $ return n
-      Just i -> return $ return $ IntVar i
-  setVarImplicit (IntVar i) b = do
-    s <- get
-    put $ setVarImplicitHelper s i b
+withParM pardef f = do
+  s <- get
+  let l = length $ intPars s
+  put s { intPars = (intPars s)++[pardef] }
+  r <- f (GIParam l)
+  ss <- get
+  put ss { intPars = intPars s }
+  return r
 
-instance FDSolver CodegenSolver where
-  type FDTerm CodegenSolver = IntTerm
-  specific_compile_constraint = linearCompile <@> basicCompile
-  specific_decompose = caching_decompose
-  specific_fresh_var super this = do
-    v@(IntVar i) <- super
-    Label $ do
-      setVarImplicit (IntVar i) True
-      return $ Return v
+astConstraint :: CPPExpr -> GecodeConstraint CodegenGecodeSolver -> CodegenGecodeSolver CPPStat
+astConstraint ctx con = do
+  procConstraint con
+  state <- get
+  let abv = astBoolVar state ctx
+      aiv = astIntVar state ctx
+      acv = astColVar state ctx
+      tnm = "t" ++ (show $ level state)
+      tnx i = "t" ++ (show $ level state) ++ [chr $ ord 'a' + i]
+  ret <- case con of
+    GCCond c b -> do
+      inner <- astConstraint ctx c
+      return $ CPPIf (astBoolExpr state ctx b) inner Nothing
+    GCAll (GecodeIBFn f) (Left c) Nothing -> do
+      inner <- astCompile $ f (IntVarCPP $ \ctx -> CPPIndex (astColVar state ctx c) (CPPVar tnm)) (BoolVarCPP $ \ctx -> CPPVar "/* GCAll undefined */")
+      return $ CPPFor (Right $ astDeclEq tnm astTInt $ astInt 0 ) (Just $ CPPBinary (CPPVar tnm) CPPOpLe $ astColSize c state ctx) (Just $ CPPUnary CPPOpPostInc (CPPVar tnm)) inner
+    GCAllC (GecodeCBFn f) (n,m) Nothing -> do
+      inner <- withParM (IntParDefCPP $ CPPVar tnm) $ \par -> astCompile $ f (m $ Term par) (BoolVarCPP $ \ctx -> CPPVar "/* GCAllC undefined */")
+      return $ CPPFor (Right $ astDeclEq tnm astTInt $ astInt 0) (Just $ CPPBinary (CPPVar tnm) CPPOpLe $ astIntExpr state ctx n) (Just $ CPPUnary CPPOpPostInc (CPPVar tnm)) inner
+    GCAll (GecodeIBFn f) (Left c) (Just b) -> do
+      inner <- astCompile $ f (IntVarCPP $ \ctx -> CPPIndex (astColVar state ctx c) (CPPVar (tnx 1))) (BoolVarCPP $ \ctx -> CPPIndex (CPPVar (tnx 0)) (CPPVar (tnx 1)))
+      return $ CPPCompound $
+        [
+          CPPBlockDecl $ astDeclFn (tnx 0) (CPPTypePrim "BoolVarArray") [ctx,astColSize c state ctx,astInt 0,astInt 1],
+          CPPStatement $ CPPFor (Right $ astDeclEq (tnx 1) astTInt $ astInt 0) (Just $ CPPBinary (CPPVar (tnx 1)) CPPOpLe $ astColSize c state ctx) (Just $ CPPUnary CPPOpPostInc (CPPVar (tnx 1))) inner,
+          CPPStatement $ CPPSimple $ CPPCall (CPPVar "rel") [ctx,CPPVar "BOT_AND",CPPVar (tnx 0),abv b]
+        ]
+    GCAny (GecodeIBFn f) (Left c) (Just b) -> do
+      inner <- astCompile $ f (IntVarCPP $ \ctx -> CPPIndex (astColVar state ctx c) (CPPVar $ tnx 1)) (BoolVarCPP $ \ctx -> CPPIndex (CPPVar $ tnx 0) (CPPVar $ tnx 1))
+      return $ CPPCompound $
+        [
+          CPPBlockDecl $ astDeclFn (tnx 0) (CPPTypePrim "BoolVarArray") [ctx,astColSize c state ctx,astInt 0,astInt 1],
+          CPPStatement $ CPPFor (Right $ astDeclEq (tnx 1) astTInt $ astInt 0) (Just $ CPPBinary (CPPVar $ tnx 1) CPPOpLe $ astColSize c state ctx) (Just $ CPPUnary CPPOpPostInc (CPPVar $ tnx 1)) inner,
+          CPPStatement $ CPPSimple $ CPPCall (CPPVar "rel") [ctx,CPPVar "BOT_OR",CPPVar $ tnx 0,abv b]
+        ]
+    GCMap (GecodeIIFn f) (Left c) cr -> do
+      inner <- astCompile $ f (IntVarCPP $ \ctx -> CPPIndex (astColVar state ctx c) (CPPVar tnm)) (IntVarCPP $ \ctx -> CPPIndex (astColVar state ctx cr) (CPPVar tnm))
+      return $ CPPFor (Right $ astDeclEq tnm astTInt $ astInt 0) (Just $ CPPBinary (CPPVar tnm) CPPOpLe $ astColSize c state ctx) (Just $ CPPUnary CPPOpPostInc (CPPVar tnm)) inner
+    GCFold (GecodeIIIFn f) c i res -> astSectionM c ctx $ \col siz -> do
+      inner <- astCompile $ f (IntVarCPP $ \_ -> CPPVar (tnx 0)) (IntVarCPP $ \ctx -> CPPIndex col (CPPVar tnm)) (IntVarCPP $ \_ -> CPPVar (tnx 1))
+      final <- astCompile $ f (IntVarCPP $ \_ -> CPPVar (tnx 0)) (IntVarCPP $ \ctx -> CPPIndex col (CPPBinary siz CPPOpSub 1)) res
+      return $ [
+          CPPBlockDecl $ astDeclEq (tnx 0) astTIV $ aiv i,
+          CPPStatement $ CPPFor (Right $ astDeclEq tnm astTInt 0) (Just $ CPPBinary (CPPVar tnm) CPPOpLe $ CPPBinary siz CPPOpSub 1) (Just $ CPPUnary CPPOpPostInc (CPPVar tnm)) $ CPPCompound
+            [
+              CPPBlockDecl $ astDeclFn (tnx 1) astTIV [ctx,astLowerBound,astUpperBound],
+              CPPStatement $ inner,
+              CPPStatement $ CPPSimple $ CPPAssign (CPPVar (tnx 0)) CPPAssOp (CPPVar (tnx 1))
+            ],
+          CPPStatement $ final
+        ]
+    GCFoldC (GecodeICIFn f) (nnn) i res -> do
+      inner <- withParM (IntParDefCPP $ CPPVar tnm) $ \par -> astCompile $ f (IntVarCPP $ \_ -> CPPVar (tnx 0)) (Term par) (IntVarCPP $ \_ -> CPPVar (tnx 1))
+      final <- withParM (IntParDefCPP $ CPPBinary (astIntExpr state ctx nnn) CPPOpSub 1) $ \par -> astCompile $ f (IntVarCPP $ \_ -> CPPVar (tnx 0)) (Term par) res
+      return $ CPPCompound
+        [
+          CPPBlockDecl $ astDeclEq (tnx 0) astTIV $ aiv i,
+          CPPStatement $ CPPFor (Right $ astDeclEq tnm astTInt 0) (Just $ CPPBinary (CPPVar tnm) CPPOpLe $ CPPBinary (astIntExpr state ctx nnn) CPPOpSub 1) (Just $ CPPUnary CPPOpPostInc (CPPVar tnm)) $ CPPCompound
+            [
+              CPPBlockDecl $ astDeclFn (tnx 1) astTIV [ctx,astLowerBound,astUpperBound],
+              CPPStatement $ inner,
+              CPPStatement $ CPPSimple $ CPPAssign (CPPVar (tnx 0)) CPPAssOp (CPPVar (tnx 1))
+            ],
+          CPPStatement $ final
+        ]
+    _ -> return $ astSimpleConstraint ctx con state
+--  return $ CPPCompound [ CPPStatement (CPPSimple $ CPPVar ("1 /* " ++(show con) ++ " */")), CPPStatement ret ]
+  return ret
 
--- | utility
+astSimpleConstraint ctx con state = case con of
+  GCBoolVal bv val -> CPPSimple $ CPPCall (CPPVar "rel") [ctx,abv bv,CPPVar "IRT_EQ",astBoolExpr state ctx val]
+  GCBoolEqual b1 b2 -> CPPSimple $ CPPCall (CPPVar "rel") [ctx,abv b1,CPPVar "IRT_EQ",abv b2]
+  GCIntVal iv val -> CPPSimple $ CPPCall (CPPVar "rel") [ctx,aiv iv,CPPVar "IRT_EQ",astIntExpr state ctx val]
+  GCMult r a b -> CPPSimple $ CPPCall (CPPVar "mult") [ctx,aiv a,aiv b,aiv r]
+  GCDiv r a b -> CPPSimple $ CPPCall (CPPVar "div") [ctx,aiv a,aiv b,aiv r]
+  GCMod r a b -> CPPSimple $ CPPCall (CPPVar "mod") [ctx,aiv a,aiv b,aiv r]
+  GCAbs r a -> CPPSimple $ CPPCall (CPPVar "abs") [ctx,aiv a,aiv r]
+  GCAt (Left r)  (Left c)              (Left p)  -> CPPSimple $ CPPCall (CPPVar "element") [ctx,acv c,aiv p,aiv r]
+  GCAt (Left r)  (Right (Left c))      (Left p)  -> astTempList state (Just $ map Const c) Nothing Nothing ctx $ \i _ _ -> [CPPSimple $ CPPCall (CPPVar "element") [ctx,i,aiv p,aiv r]]
+  GCAt (Left r)  (Right (Right c))     (Left p)  -> astParTempList state c ctx $ \i -> [CPPSimple $ CPPCall (CPPVar "element") [ctx,i,aiv p,aiv r]]
+  GCAt (Right r) (Left c)              (Left p)  -> CPPSimple $ CPPCall (CPPVar "element") [ctx,acv c,aiv p,astIntExpr state ctx r]
+  GCAt (Right r) (Right (Left c))      (Left p)  -> astTempList state (Just $ map Const c) Nothing Nothing ctx $ \i _ _ -> [CPPSimple $ CPPCall (CPPVar "element") [ctx,i,aiv p,astIntExpr state ctx r]]
+  GCAt (Right r) (Right (Right c))     (Left p)  -> astParTempList state c ctx $ \i -> [CPPSimple $ CPPCall (CPPVar "element") [ctx,i,aiv p,astIntExpr state ctx r]]
+  GCAt (Left r)  (Left c)              (Right p) -> CPPSimple $ CPPCall (CPPVar "rel") [ctx,CPPIndex (acv c) (astIntExpr state ctx p),CPPVar "IRT_EQ",aiv r]
+  GCAt (Left r)  (Right (Left c))      (Right p) -> astTempList state (Just $ map Const c) Nothing Nothing ctx $ \i _ _ -> [CPPSimple $ CPPCall (CPPVar "element") [ctx,i,astIntExpr state ctx p,aiv r]]
+  GCAt (Left r)  (Right (Right (n,f))) (Right p) -> CPPSimple $ CPPCall (CPPVar "rel") [ctx,astIntExpr state ctx $ f p,CPPVar "IRT_EQ",aiv r]
+  GCAt (Right r) (Left c)              (Right p) -> CPPSimple $ CPPCall (CPPVar "rel") [ctx,CPPIndex (acv c) (astIntExpr state ctx p),CPPVar "IRT_EQ",astIntExpr state ctx r]
+  GCAt (Right r) (Right (Left c))      (Right p) -> astTempList state (Just $ map Const c) Nothing Nothing ctx $ \i _ _ -> [CPPSimple $ CPPCall (CPPVar "element") [ctx,i,astIntExpr state ctx p,astIntExpr state ctx r]]
+  GCAt (Right r) (Right (Right (n,f))) (Right p) -> CPPSimple $ CPPCall (CPPVar "rel") [ctx,astIntExpr state ctx $ f p,CPPVar "IRT_EQ",astIntExpr state ctx r]
+  GCDom v (Left c)          Nothing  -> CPPSimple $ CPPCall (CPPVar "count") [ctx,acv c,aiv v,CPPVar "IRT_GR",astInt 0]
+  GCDom v (Right (Left c))  Nothing  -> astTempSetConst state c ctx $ \i -> [CPPSimple $ CPPCall (CPPVar "dom") [ctx,aiv v,i]]
+  GCDom v (Right (Left c))  (Just b) -> astTempSetConst state c ctx $ \i -> [CPPSimple $ CPPCall (CPPVar "dom") [ctx,aiv v,i,abv b]]
+  GCDom v (Right (Right c)) Nothing  -> astTempSet state c ctx      $ \i -> [CPPSimple $ CPPCall (CPPVar "dom") [ctx,aiv v,i]]
+  GCDom v (Right (Right c)) (Just b) -> astTempSet state c ctx      $ \i -> [CPPSimple $ CPPCall (CPPVar "dom") [ctx,aiv v,i,abv b]]
+  GCChannel a b -> CPPSimple $ CPPCall (CPPVar "channel") [ctx,aiv a,abv b]
+  GCLinear l op ->       astLinearConstraint state ctx l op Nothing
+  GCLinearReif l op b -> astLinearConstraint state ctx l op $ Just b
+  -- TODO: Cat
+  -- TODO: Take
+  GCAnd lst r -> astTempList state Nothing Nothing (Just lst) ctx $ \_ _ b -> [CPPSimple $ CPPCall (CPPVar "rel") [ctx,CPPVar "BOT_AND",b,abv r]]
+  GCOr lst r -> astTempList state Nothing Nothing (Just lst) ctx $ \_ _ b -> [CPPSimple $ CPPCall (CPPVar "rel") [ctx,CPPVar "BOT_OR",b,abv r]]
+  GCNot r a -> CPPSimple $ CPPCall (CPPVar "rel") [ctx,abv r,CPPVar "IRT_NQ",abv a]
+  GCEquiv r a b -> CPPSimple $ CPPCall (CPPVar "rel") [ctx,abv r,CPPVar "BOT_EQV",abv a,abv b]
+  GCAllDiff b c -> astSection state c ctx $ \col siz -> [CPPStatement $ CPPSimple $ CPPCall (CPPVar "distinct") (if b then [ctx,col,CPPVar "ICL_DOM"] else [ctx,col])]
+  GCSorted (Left c) op -> CPPSimple $ CPPCall (CPPVar "rel") [ctx,acv c,astLinOperator op False]
+  GCSum c (Left i) -> astSection state c ctx $ \col siz -> [CPPStatement $ CPPSimple $ CPPCall (CPPVar "linear") [ctx,col,CPPVar "IRT_EQ",aiv i]]
+  GCSum c (Right i) -> astSection state c ctx $ \col siz -> [CPPStatement $ CPPSimple $ CPPCall (CPPVar "linear") [ctx,col,CPPVar "IRT_EQ",astIntExpr state ctx i]]
+  GCCount c (Left valvar) op (Left countvar) -> CPPSimple $ CPPCall (CPPVar "count") [ctx,astColVar state ctx c,astIntVar state ctx valvar,astLinOperator op False,astIntVar state ctx countvar]
+  GCCount c (Right val) op (Left countvar) -> CPPSimple $ CPPCall (CPPVar "count") [ctx,astColVar state ctx c,astIntExpr state ctx val,astLinOperator op False,astIntVar state ctx countvar]
+  GCCount c (Left valvar) op (Right count) -> CPPSimple $ CPPCall (CPPVar "count") [ctx,astColVar state ctx c,astIntVar state ctx valvar,astLinOperator op False,astIntExpr state ctx count]
+  GCCount c (Right val) op (Right count) -> CPPSimple $ CPPCall (CPPVar "count") [ctx,astColVar state ctx c,astIntExpr state ctx val,astLinOperator op False,astIntExpr state ctx count]
+  _ -> CPPSimple $ CPPVar $ "1 /*" ++ (show con) ++ "*/"
+  where abv = astBoolVar state ctx
+        aiv = astIntVar state ctx
+        acv = astColVar state ctx
+        tnm = "t" ++ (show $ level state)
+        tnx i = "t" ++ (show $ level state) ++ [chr $ ord 'a' + i]
 
-getNumVars :: Store -> Int
-getNumVars s = vars s
+ifList :: Bool -> [a] -> [a]
+ifList True x = x
+ifList False _ = []
 
-getVarData :: Store -> Int -> VarData
-getVarData s i = (vardata s) !! ((length $ vardata s)-1-i)
+fnLoadColPar = 
+  [
+    "int nv=1;",
+    "for (char *ptr=str; *ptr!=0; ptr++) {",
+    "  nv += (*ptr == ',');",
+    "}",
+    "int *ret=new int[nv];",
+    "for (int n=0; n<nv; n++) {",
+    "  ret[n]=strtol(str,&str,10);",
+    "  while (*str!=0 && *str!=',') str++;",
+    "  str++;",
+    "}",
+    "*siz=nv;",
+    "return ret;"
+  ]
 
-modVarData :: Store -> Int -> VarData -> Store
-modVarData s i d = s { vardata = revrepl (vardata s) i d }
+astTranslUnit = do
+  pst <- astPost
+  state <- get
+  return $ CPPNamespace 
+   [
+    CPPElemDef $ CPPDef {
+      cppDefName="loadCol",
+      cppDefRetType=CPPPtr [] astTInt,
+      cppDefStor=[],
+      cppDefQual=[],
+      cppDefArgs=[astDecl "str" $ CPPPtr [] (CPPTypePrim "char"),astDecl "siz" $ CPPPtr [] astTInt],
+      cppDefBody=Just $ CPPVerbStat fnLoadColPar
+    },
+    CPPElemClass $ CPPClass {
+      cppClassName = astMCPTypeName state,
+      cppClassInherit = [(CPPPublic,CPPTypePrim "Space")],
+      cppClassDecls = 
+        (if nIntPars state > 0
+           then [(CPPProtected,astDecl "iP" (CPPPtr [] astTInt))]
+           else []
+        ) ++
+        (if nColPars state > 0
+           then [(CPPProtected,astDecl "cP"  (CPPPtr [] $ CPPPtr [] astTInt)),
+                 (CPPProtected,astDecl "cPs" (CPPPtr [] astTInt))
+                ]
+           else []
+        ) ++
+        (case ret state of
+           Nothing -> []
+           Just c -> [(CPPProtected,astDecl "ret" (CPPTypePrim "IntVarArray"))]
+        ) ++
+        (case minVar state of
+           Nothing -> []
+           Just v -> [(CPPProtected,astDecl "cost" (CPPTypePrim "IntVar"))]
+        ),
+      cppClassDefs = [
+        (CPPPublic,CPPDef { 
+           cppDefName="copy",
+           cppDefRetType=CPPPtr [] (CPPTypePrim "Space"), 
+           cppDefStor=[CPPVirtual], 
+           cppDefQual=[],
+           cppDefArgs=[astDecl "share" $ CPPTypePrim "bool"], 
+           cppDefBody = Just $ CPPReturn $ Just $ CPPNew (astMCPType state) [CPPVar "share",astThis]
+        }),
+        (CPPPublic,CPPDef {
+           cppDefName="print",
+           cppDefRetType=CPPTypePrim "void",
+           cppDefStor=[CPPVirtual],
+           cppDefArgs=[astDecl "os" $ CPPRef [] $ CPPTypePrim "ostream"],
+           cppDefQual=[CPPQualConst],
+           cppDefBody = Just $ CPPSimple $ case ret state of
+             Just r -> CPPBinary (CPPBinary (CPPVar "os") CPPOpShl (call astThis "ret")) CPPOpShl (CPPVar "endl")
+             _ -> CPPBinary (CPPBinary (CPPVar "os") CPPOpShl (CPPConst $ CPPConstString "Ok")) CPPOpShl (CPPVar "endl")
+        }),
+        (CPPPublic,CPPDef {
+           cppDefName="getVar",
+           cppDefRetType=CPPTypePrim "IntVar",
+           cppDefStor=[CPPVirtual],
+           cppDefArgs=[astDecl "v" $ CPPTypePrim "int"],
+           cppDefQual=[],
+           cppDefBody = Just $ case (ret state, minVar state) of
+             (Just r, Just _) -> CPPReturn $ Just $ CPPCond (CPPBinary (CPPVar "v") CPPOpEq (CPPConst $ CPPConstInt $ -1)) (Just $ CPPVar "cost") $ CPPIndex (astColVar state astThis r) $ CPPVar "v"
+             (Just r, Nothing) -> CPPReturn $ Just $ CPPIndex (astColVar state astThis r) $ CPPVar "v"
+        }),
+        (CPPPublic,CPPDef {
+           cppDefName="getBranchVarIds",
+           cppDefRetType=CPPTypePrim "vector<int>",
+           cppDefStor=[CPPVirtual],
+           cppDefArgs=[],
+           cppDefQual=[],
+           cppDefBody = case ret state of
+              Just r -> Just $ CPPCompound [
+                 CPPBlockDecl $ astDeclFn "r" (CPPTypePrim "vector<int>") [astColSize r state astThis],
+                 CPPStatement $ CPPFor (Right $ astDeclEq "i" astTInt $ astInt 0) (Just $ CPPBinary (CPPVar "i") CPPOpLe $ astColSize r state astThis) (Just $ CPPUnary CPPOpPostInc $ CPPVar "i") $
+                   CPPSimple $ CPPAssign (CPPIndex (CPPVar "r") (CPPVar "i")) CPPAssOp $ CPPVar "i",
+                 CPPStatement $ CPPReturn $ Just $ CPPVar "r"
+               ]
+        })]++(
+          case (minVar state) of
+            Nothing -> []
+            Just mv -> 
+              [(CPPPublic,CPPDef {
+                cppDefName="constrain",
+                cppDefRetType=CPPTypePrim "void",
+                cppDefStor=[],
+                cppDefArgs=[astDecl "best_" $ CPPRef [CPPQualConst] (CPPTypePrim "Space")],
+                cppDefQual=[],
+                cppDefBody = Just $ CPPCompound $ 
+                  [
+                    CPPBlockDecl $ astDeclEq "best" (CPPPtr [] (CPPTypePrim "MCPProgram")) (CPPCast (CPPPtr [] (CPPTypePrim "MCPProgram")) (CPPUnary CPPOpAdr $ CPPVar "best_")),
+                    CPPStatement $ CPPSimple $ CPPCall (CPPVar "rel") [astThis,CPPVar "cost",CPPVar "IRT_LE",CPPCall (CPPMember (CPPMember (CPPVar "best") "cost" True) "val" False) []]
+                  ]
+              })]
+        )
+      ,
+      cppClassConstrs = [
+        (CPPPublic, CPPConstr { cppConstrStor=[], cppConstrArgs=
+          (
+            (if (nIntPars state)+(nColPars state) > 0
+              then [astDecl "args" (CPPPtr [] $ CPPPtr [] $ CPPTypePrim "char")]
+              else []
+            )
+          ), cppConstrBody = Just $ CPPCompound $ (
+            (if (nIntPars state)+(nColPars state) > 0
+              then [CPPStatement $ CPPSimple $ CPPUnary CPPOpPostInc (CPPVar "args")]
+              else []
+            ) ++
+            (ifList (nIntPars state > 0) [CPPComment "init of iP", CPPStatement $ CPPVerbStat
+              [
+                "iP=new int["++(show (nIntPars state))++"];",
+                "for (int i=0; i<"++(show (nIntPars state))++"; i++) {",
+                "  iP[i]=strtol(*(args++),NULL,10);",
+                "}"
+              ]
+            ])++
+            (ifList (nColPars state > 0) [CPPComment "init of cP", CPPStatement $ CPPVerbStat
+              [
+                "cP=new int*["++(show (nColPars state))++"];",
+                "cPs=new int["++(show (nColPars state))++"];",
+                "for (int i=0; i<"++(show (nColPars state))++"; i++) {",
+                "  cP[i]=loadCol(*(args++),cPs+i);",
+                "}"
+              ]
+            ])++
+            (case ret state of
+              Nothing -> []
+              Just r -> 
+                [
+                  CPPComment "init of ret",
+                  CPPStatement $ CPPSimple $ CPPAssign (CPPVar "ret") CPPAssOp (CPPCall (CPPVar "IntVarArray") [astThis,astColSize r state astThis])
+                ]
+            ) ++
+            [CPPComment "begin of main post"]
+          )++pst, cppConstrInit=[]
+        }),
+        (CPPPublic,CPPConstr { cppConstrStor=[], cppConstrArgs=[astDecl "share" $ CPPTypePrim "bool",astDecl "s" $ CPPRef [] $ astMCPType state], cppConstrInit=
+          (
+            [(Right (CPPTypePrim "Space"),[CPPVar "share",CPPVar "s"])] ++
+            (if nIntPars state > 0
+              then [(Left (CPPVar "iP"),[call (CPPVar "s") "iP"])]
+              else []
+            ) ++
+            (if nColPars state > 0
+              then [(Left (CPPVar "cP" ),[call (CPPVar "s") "cP" ]),
+                    (Left (CPPVar "cPs"),[call (CPPVar "s") "cPs"])
+                   ]
+              else []
+            )
+          ), cppConstrBody = Just $ CPPCompound $ 
+           (case (ret state) of
+            Nothing -> []
+            Just r -> [CPPStatement $ CPPSimple $ CPPCall (call (call astThis "ret") "update") [astThis,CPPVar "share",call (CPPVar "s") "ret"]]
+--          (if (nBoolVars state > 0) then [CPPStatement $ CPPSimple $ CPPCall (call (CPPVar $ boolVarName $ BoolVar (level state) ii) "update") [astThis,CPPVar "share",CPPVar $ boolVarName $ BoolVar astBoolVar state (CPPVar "s") ii] | ii <- [0..(nBoolVars state)-1] ] else []) ++
+--          (if (nIntVars state > 0) then [CPPStatement $ CPPSimple $ CPPCall (call (CPPVar $ intVarName $ IntVar (level state) ii) "update") [astThis,CPPVar "share",CPPVar $ astIntVar state (CPPVar "s") ii] | ii <- [0..(nIntVars state)-1] ] else []) ++
+--          (if (length (colVars state) > 0) then [CPPStatement $ CPPSimple $ CPPCall (call (CPPVar $ colVarName $ ColVar (level state) ii) "update") [astThis,CPPVar "share",CPPVar $ astColVar state (CPPVar "s") ii] | ii <- [0..(length $ colVars state)-1] ] else [])
+           ) ++ (case (minVar state) of
+            Nothing -> []
+            Just _ -> [CPPStatement $ CPPSimple $ CPPCall (call (call astThis "cost") "update") [astThis,CPPVar "share",call (CPPVar "s") "cost"]]
+           )
+        })
+      ]
+    }
+   ]
 
-getVarType :: Store -> Int -> GType
-getVarType s i = vtype $ getVarData s i
+astMainUnitGen = do
+  state <- get
+  return $ CPPNamespace 
+    [ 
+      CPPElemDef $ CPPDef {
+        cppDefName="main",
+        cppDefRetType=astTInt,
+        cppDefStor=[],
+        cppDefQual=[],
+        cppDefArgs=[astDecl "argc" astTInt, astDecl "argv" $ CPPPtr [] $ CPPPtr [] $ CPPTypePrim "char"],
+        cppDefBody=Just $ CPPCompound $
+        ([
+          CPPBlockDecl $ astDeclEq "prog" (CPPPtr [] $ astMCPType state) $ CPPNew (astMCPType state)
+            (if ((nIntPars state)+(nColPars state) > 0)
+              then [CPPVar "argv"]
+              else []
+            ),
+          CPPStatement $ CPPSimple $ CPPCall (CPPVar "eval") [CPPVar "prog"],
+          CPPStatement $ CPPReturn $ Just $ astInt 0
+        ])
+      }
+    ]
 
-isVarImplicit :: Store -> Int -> Bool
-isVarImplicit s i = vimpl $ getVarData s i
+astMainUnitDef = do
+  state <- get
+  return $ CPPNamespace
+    [
+      CPPElemDef $ CPPDef {
+        cppDefName="main",
+        cppDefRetType=astTInt,
+        cppDefStor=[],
+        cppDefQual=[],
+        cppDefArgs=[astDecl "argc" astTInt, astDecl "argv" $ CPPPtr [] $ CPPPtr [] $ CPPTypePrim "char"],
+        cppDefBody=Just $ CPPCompound $
+        ([
+          CPPBlockDecl $ astDeclEq "prog" (CPPPtr [] $ astMCPType state) $ CPPNew (astMCPType state)
+            (if ((nIntPars state)+(nColPars state) > 0)
+              then [CPPVar "argv"]
+              else []
+            ),
+          CPPBlockDecl $ astDecl   "so"   (CPPTypePrim "Search::Options")
+         ] ++ (if noTrailing $ options state then [
+          CPPStatement $ CPPSimple $ CPPAssign (CPPMember (CPPVar "so") "c_d" False) CPPAssOp 1
+         ] else []) ++ [
+          CPPBlockDecl $ astDeclFn "srch" (CPPTempl (case minVar state of { Nothing -> "DFS"; _ -> "BAB" }) [astMCPType state]) [CPPVar "prog",CPPVar "so"],
+          CPPStatement $ CPPDelete $ CPPVar "prog",
+          CPPStatement $ CPPWhile (astInt (case minVar state of { Nothing -> 0; _ -> 1 })) True $ CPPCompound [
+            CPPBlockDecl $ astDeclEq "sol" (CPPPtr [] $ astMCPType state) $ CPPCall (call (CPPVar "srch") "next") [],
+            CPPStatement $ CPPIf (CPPUnary CPPOpNeg $ CPPVar "sol") CPPBreak Nothing,
+            CPPStatement $ CPPSimple $ CPPCall (call (CPPUnary CPPOpInd $ CPPVar "sol") "print") [CPPVar "std::cout"]
+          ],
+          CPPStatement $ CPPReturn $ Just $ astInt 0
+        ])
+      }
+    ]
+
+astPost = do
+  state <- get
+  conss <- mapM (astConstraint astThis) (reverse $ cons state)
+  state <- get
+  return $
+    [CPPComment "/* init col consts */"]++
+    (concat [ case (colList state)!!pos of
+      ColList lst -> [ CPPBlockDecl $ CPPDecl {
+        cppDeclName=Just ("cte" ++ (show $ level state) ++ "_" ++ (show pos)),
+        cppType=CPPArray [CPPQualConst] (CPPTypePrim "int") Nothing,
+        cppTypeQual=[CPPQualConst],
+        cppTypeStor=[],
+        cppDeclInit=Just $ CPPInitArray [ astIntExpr state astThis x | x <- lst ]
+       }]
+      ColSlice f n p -> [ CPPBlockDecl $ CPPDecl {
+        cppDeclName=Just ("cte" ++ (show $ level state) ++ "_" ++ (show pos)),
+        cppType=CPPArray [] (CPPTypePrim "int") (Just $ astIntExpr state astThis n),
+        cppTypeQual=[],
+        cppTypeStor=[],
+        cppDeclInit=Nothing
+       },
+       CPPStatement $  
+         CPPFor 
+           (Right $ astDeclEq "i" astTInt $ astInt 0)
+           (Just $ CPPBinary (CPPVar "i") CPPOpLe $ astIntExpr state astThis n) 
+           (Just $ CPPUnary CPPOpPostInc $ CPPVar "i") $ 
+           CPPSimple $ CPPAssign 
+             (CPPIndex (CPPVar ("cte" ++ (show $ level state) ++ "_" ++ (show pos))) $ CPPVar "i") 
+             CPPAssOp $ 
+             withPar (IntParDefCPP $ CPPVar "i") state $ \state par -> astColExpr state astThis p $ f $ Term par
+       ]
+      ColCat a b -> [ CPPBlockDecl $ CPPDecl {
+        cppDeclName=Just ("cte" ++ (show $ level state) ++ "_" ++ (show pos)),
+        cppType=CPPArray [] (CPPTypePrim "int") (Just $ astIntExpr state astThis $ size a + size b),
+        cppTypeQual=[],
+        cppTypeStor=[],
+        cppDeclInit=Nothing
+       },
+       CPPStatement $
+         CPPFor
+           (Right $ astDeclEq "i" astTInt $ astInt 0)
+           (Just $ CPPBinary (CPPVar "i") CPPOpLe $ astIntExpr state astThis $ size a)
+           (Just $ CPPUnary CPPOpPostInc $ CPPVar "i") $
+           CPPSimple $ CPPAssign
+             (CPPIndex (CPPVar ("cte" ++ (show $ level state) ++ "_" ++ (show pos))) $ CPPVar "i")
+             CPPAssOp $
+             withPar (IntParDefCPP $ CPPVar "i") state $ \state par -> astColExpr state astThis a $ Term par,
+       CPPStatement $
+         CPPFor
+           (Right $ astDeclEq "i" astTInt $ astIntExpr state astThis $ size a)
+           (Just $ CPPBinary (CPPVar "i") CPPOpLe $ astIntExpr state astThis $ size a + size b)
+           (Just $ CPPUnary CPPOpPostInc $ CPPVar "i") $
+           CPPSimple $ CPPAssign
+             (CPPIndex (CPPVar ("cte" ++ (show $ level state) ++ "_" ++ (show pos))) $ CPPVar "i")
+             CPPAssOp $
+             withPar (IntParDefCPP $ CPPVar "i") state $ \state par -> astColExpr state astThis b $ (Term par) - (size a)
+       ]
+      x -> error $ "Unsupported operation on constant lists: " ++ (show x)
+     | pos <- [0..(length (colList state))-1] 
+    ]) ++
+    (if (nBoolVars state > 0) 
+      then 
+        [CPPComment "decl boolvars"]++[
+          CPPBlockDecl $ astDeclFn (boolVarName $ BoolVar (level state) j) astTBV [astThis,astInt 0,astInt 1] | j <- [0..nBoolVars state - 1] 
+        ] else []) ++
+    (if (nIntVars state > 0)
+      then
+        [CPPComment "decl intvars"]++[
+          CPPBlockDecl $ astDeclFn (intVarName $ IntVar (level state) j) astTIV [astThis,astLowerBound,astUpperBound] | j <- [0..nIntVars state - 1]
+        ] else []
+    ) ++
+    (if (length (colVars state) > 0) 
+      then 
+        [CPPComment "decl colvars"]++[
+          CPPBlockDecl $ astDeclFn (colVarName $ ColVar (level state) j) astTIVA [astColSize (ColVar (level state) j) state astThis] | j <- [0..(length $ colVars state)-1], not (level state == 0 && isJust (ret state) && ret state == Just (ColVar 0 j)) 
+        ] else []
+    ) ++
+    [CPPComment $ "init col vars"]++
+    [ CPPStatement $ case x of
+        ColDefSize s -> CPPCompound [CPPComment "ColDefSize",CPPStatement $ CPPFor (Right $ astDeclEq "i" astTInt $ astInt 0) (Just $ CPPBinary (CPPVar "i") CPPOpLe $ astIntExpr state astThis s) (Just $ CPPUnary CPPOpPostInc (CPPVar "i")) $
+          CPPSimple $ CPPCall (call (CPPIndex (astColVar state astThis i) (CPPVar "i")) "init") [astThis,astLowerBound,astUpperBound]
+         ]
+        ColDefList l -> CPPCompound $ 
+            (CPPComment "ColDefList") :
+            (CPPBlockDecl $ astDeclFn "b" astTIVA [astInt $ toInteger $ length l]) :
+            ([ CPPStatement $ CPPSimple $ CPPAssign (CPPIndex (CPPVar "b") (astInt $ toInteger i2)) CPPAssOp $ (astIntVar state astThis f2) | (i2,f2) <- zip [0..(length l)-1] l ] ++
+             [ CPPStatement $ CPPSimple $ CPPAssign (astColVar state astThis i) CPPAssOp (CPPVar "b") ])
+        ColDefCat a b -> if (astColVar state astThis i) == (call astThis "ret")
+          then
+            CPPCompound $ [
+              CPPComment "ColDefCat-ret",
+              CPPStatement $ CPPFor (Right $ astDeclEq "i" astTInt $ astInt 0) (Just $ CPPBinary (CPPVar "i") CPPOpLe $ astColSize a state astThis) (Just $ CPPUnary CPPOpPostInc (CPPVar "i")) $ CPPSimple $ CPPAssign (CPPIndex (astColVar state astThis i) (CPPVar "i")) CPPAssOp (CPPIndex (astColVar state astThis a) (CPPVar "i")),
+              CPPStatement $ CPPFor (Right $ astDeclEq "i" astTInt $ astInt 0) (Just $ CPPBinary (CPPVar "i") CPPOpLe $ astColSize b state astThis) (Just $ CPPUnary CPPOpPostInc (CPPVar "i")) $ CPPSimple $ CPPAssign (CPPIndex (astColVar state astThis i) (CPPVar "i" + astColSize a state astThis)) CPPAssOp (CPPIndex (astColVar state astThis b) (CPPVar "i"))
+            ]
+          else
+            CPPCompound $ [
+              CPPComment "ColDefCat",
+              CPPBlockDecl $ astDeclFn "b" astTIVA [astColSize a state astThis + astColSize b state astThis],
+              CPPStatement $ CPPFor (Right $ astDeclEq "i" astTInt $ astInt 0) (Just $ CPPBinary (CPPVar "i") CPPOpLe $ astColSize a state astThis) (Just $ CPPUnary CPPOpPostInc (CPPVar "i")) $ CPPSimple $ CPPAssign (CPPIndex (CPPVar "b") (CPPVar "i")) CPPAssOp (CPPIndex (astColVar state astThis a) (CPPVar "i")),
+              CPPStatement $ CPPFor (Right $ astDeclEq "i" astTInt $ astInt 0) (Just $ CPPBinary (CPPVar "i") CPPOpLe $ astColSize b state astThis) (Just $ CPPUnary CPPOpPostInc (CPPVar "i")) $ CPPSimple $ CPPAssign (CPPIndex (CPPVar "b") (CPPVar "i" + astColSize a state astThis)) CPPAssOp (CPPIndex (astColVar state astThis b) (CPPVar "i")),
+              CPPStatement $ CPPSimple $ CPPAssign (astColVar state astThis i) CPPAssOp (CPPVar "b")
+            ]
+  {-      ColDefTake a p l -> CPPCompound $ [
+            CPPBlockDecl $ astDeclFn "b" astTIVA [astThis,astIntExpr state astThis l],
+            CPPStatement $ CPPFor (Right $ astDeclEq "i" astTInt $ astInt 0) (Just $ CPPBinary (CPPVar "i") CPPOpLe $ astColSize a state astThis) (Just $ CPPUnary CPPOpPostInc (CPPVar "i")) $ CPPSimple $ CPPAssign (CPPIndex (CPPVar "b") (CPPVar "i")) CPPAssOp (CPPIndex (astColVar state astThis a) (CPPVar "i" + (astIntExpr state astThis p))),
+            CPPStatement $ CPPSimple $ CPPAssign (astColVar state astThis i) CPPAssOp (CPPVar "b")
+          ]-}
+      | (i,x) <- zip (map (ColVar (level state)) [0..(length $ colVars state)-1]) $ colVars state ] ++
+     (case (ret state) of
+       Nothing -> []
+       Just (ColVar 0 _) | level state == 0 -> []
+       Just r -> 
+         [
+           CPPComment "init ret",
+           CPPStatement $ CPPFor (Right $ astDeclEq "i" astTInt $ astInt 0) (Just $ CPPBinary (CPPVar "i") CPPOpLe $ astColSize r state astThis) (Just $ CPPUnary CPPOpPostInc (CPPVar "i")) $ CPPSimple $ CPPAssign (CPPIndex (call astThis "ret") (CPPVar "i")) CPPAssOp (CPPIndex (astColVar state astThis r) (CPPVar "i"))
+         ]
+     ) ++
+     [CPPComment "constraints"]++[ CPPStatement x | x <- conss ] ++
+     (if level state == 0
+       then 
+         [CPPComment "branchers" ]++
+         (case minVar state of
+           Nothing -> []
+           Just m -> 
+             [
+               CPPStatement $ CPPSimple $ CPPAssign (CPPVar "cost") CPPAssOp (astIntVar state astThis m),
+               CPPStatement $ CPPSimple $ CPPCall (CPPVar "branch") [astThis,call astThis "cost",CPPVar "INT_VAL_MIN"]
+             ]
+         )++
+         ([CPPStatement $ CPPSimple $ CPPCall (CPPVar "branch") [astThis,call astThis "ret",CPPVar "INT_VAR_SIZE_MIN",CPPVar "INT_VAL_SPLIT_MIN"]])
+       else []
+     )
+
+generateGecode :: CompilableModel t => t -> String
+generateGecode x = 
+  let ([tru,mnu],state) = run $ compile False x $ retState astGenerate
+      sru = case (noGenSearch $ options state) of
+        True -> ""
+        False -> case (minVar state) of
+          Nothing -> search $ prt ["branch"] <@> fs <@> Generator.label "branch" domsizeV minV medianD ($<=)
+          Just _ -> search $ prt ["branch"] <@> (bbmin "cost" <@> (Generator.label "bound" lbV minV medianD ($==) <&> Generator.label "branch" domsizeV minV medianD ($<=) {- <&> Generator.label "bound" lbV minV meanD ($==) -} ))
+      ret = codegen tru ++ sru ++ codegen mnu
+      in ret

@@ -4,7 +4,8 @@
 typedef enum {
   GOPERATOR_OEQUAL,
   GOPERATOR_ODIFF,
-  GOPERATOR_OLESS
+  GOPERATOR_OLESS,
+  GOPERATOR_OLESSEQUAL
 } goperator_t;
 
 #ifndef _interface_cpp_
@@ -14,6 +15,7 @@ HaskellModel *gecode_model_create(void);
 HaskellModel *gecode_model_copy(HaskellModel *model);
 HaskellModel *gecode_model_copy_reentrant(HaskellModel *model);
 void gecode_model_destroy(HaskellModel *model);
+void gecode_model_propagate(HaskellModel *model);
 int gecode_int_newvar(HaskellModel *model);
 int gecode_int_rel(HaskellModel *model, int v1, goperator_t op, int v2);
 int gecode_int_value(HaskellModel *model, int v, int val);
@@ -26,6 +28,9 @@ int gecode_int_linear(HaskellModel *model, int num, int *vars, int *coef, gopera
 int gecode_int_alldiif(HaskellModel *model, int num, int *vars);
 int gecode_int_sorted(HaskellModel *model, int num, int *vars, int strict);
 void gecode_int_info(HaskellModel *model, int var, int *min, int *max, int *med, int *size, int *val);
+int gecode_int_get_size(HaskellModel *model, int var);
+int gecode_int_get_value(HaskellModel *model, int var);
+int gecode_int_get_median(HaskellModel *model, int var);
 int gecode_bool_newvar(HaskellModel *model);
 #endif
 

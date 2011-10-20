@@ -7,6 +7,7 @@
  -}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE FlexibleContexts #-}
 
 module Control.CP.SearchTree (
@@ -14,7 +15,6 @@ module Control.CP.SearchTree (
   transformTree,
   bindTree,
   insertTree,
-  (\/),
   (/\),
   true,
   disj,
@@ -25,20 +25,18 @@ module Control.CP.SearchTree (
   addT,
   exist,
   forall,
-  addTo,
-  false,
-  exists,
-  label,
   indent,
   showTree,
-  MonadTree,
+  mapTree,
+  MonadTree(..),
   untree
 ) where
 
 import Control.CP.Solver
-import Control.CP.Mixin
+import Control.Mixin.Mixin
 
 import Control.Monad
+import Control.Monad.Cont
 import Control.Monad.Reader
 import Control.Monad.Writer
 import Control.Monad.State
@@ -58,6 +56,16 @@ data Tree s a where
   NewVar  :: Term s t => (t -> Tree s a) -> Tree s a   -- add a new variable to a tree
   Label   :: s (Tree s a) -> Tree s a      	       -- label with a strategy
 
+flattenTree :: Solver s => Tree s a -> Maybe ([Constraint s],a)
+flattenTree Fail = Nothing
+flattenTree (Return a) = Just ([],a)
+flattenTree (Try _ _) = Nothing
+flattenTree (Add c t) = case flattenTree t of
+  Nothing -> Nothing
+  Just (l,a) -> Just (c:l,a)
+flattenTree (NewVar _) = Nothing
+flattenTree (Label _) = Nothing
+
 transformTree :: Solver s => Mixin (Tree s a -> Tree s a)
 transformTree _ _ Fail = Fail
 transformTree _ _ (Return x) = Return x
@@ -66,6 +74,14 @@ transformTree _ t (Add c x) = Add c (t x)
 transformTree _ t (NewVar f) = NewVar (\x -> t $ f x)
 transformTree _ t (Label m) = Label $ m >>= return . t
 -- transformTree s _ x = s x
+
+mapTree :: (Solver s1, Solver s2, MonadTree m, TreeSolver m ~ s2) => (forall t. s1 t -> s2 t) -> Tree s1 a -> m a
+mapTree _ Fail = false
+mapTree _ (Return a) = return a
+mapTree f (Try a b) = mapTree f a \/ mapTree f b
+-- mapTree f (Add c n) = label $ f $ (add c >>= \t -> if t then return (mapTree f n) else return false)
+-- mapTree (NewVar _) = undefined
+mapTree f (Label l) = label $ (f l) >>= (\t -> return (mapTree f t))
 
 instance Solver s => Functor (Tree s) where
 	fmap  = liftM 
@@ -166,11 +182,11 @@ infixl 2 \/
 --   allowing monad transformer decoration.
 class (Monad m, Solver (TreeSolver m)) => MonadTree m where
   type TreeSolver m :: * -> *
-  addTo  :: Constraint (TreeSolver m) -> m a -> m a
-  false  :: m a
-  (\/)   :: m a -> m a -> m a
-  exists :: Term (TreeSolver m) t => (t -> m a) -> m a
-  label  :: (TreeSolver m) (m a) -> m a
+  addTo   :: Constraint (TreeSolver m) -> m a -> m a
+  false   :: m a
+  (\/)    :: m a -> m a -> m a
+  exists  :: Term (TreeSolver m) t => (t -> m a) -> m a
+  label   :: (TreeSolver m) (m a) -> m a
 
 instance Solver solver => MonadTree (Tree solver) where
   type TreeSolver (Tree solver)  = solver
@@ -179,6 +195,14 @@ instance Solver solver => MonadTree (Tree solver) where
   (\/)    =  Try
   exists  =  NewVar
   label   =  Label
+
+instance (MonadTree m, Solver (TreeSolver m)) => MonadTree (ContT r m) where
+  type TreeSolver (ContT r m) = TreeSolver m
+  addTo constraint cm = ContT $ \k -> addTo constraint (runContT cm k) 
+  false               = lift false
+  l \/ r              = ContT $ \k -> (runContT l k) \/ (runContT r k)
+  exists f            = ContT $ \k -> exists (\t -> runContT (f t) k)
+  label scm           = ContT $ \k -> label (scm >>= \cm -> return $ runContT cm k)
 
 -------------------------------------------------------------------------------
 ----------------------------------- Sugar -------------------------------------

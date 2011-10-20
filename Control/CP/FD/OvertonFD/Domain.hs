@@ -34,7 +34,8 @@ module Control.CP.FD.OvertonFD.Domain (
     findMin,
     size,
     shiftDomain,
-    mapDomain
+    mapDomain,
+    absDomain
 ) where
 
 import qualified Data.IntSet as IntSet
@@ -44,7 +45,7 @@ import Control.CP.Debug
 
 data Domain
     = Set IntSet
-    | Range Int Int
+    | Range !Int !Int
     deriving Show
 
 size :: Domain -> Int
@@ -68,7 +69,7 @@ instance (Integral a, Integral b) => ToDomain (a, b) where
     toDomain (a, b) = Range (fromIntegral a) (fromIntegral b)
 
 instance ToDomain () where
-    toDomain () = Range (-10000) 10000 -- minBound maxBound (too sensitive to overflow, e.g. 2 * minBound == 0)
+    toDomain () = Range (-1000000000) 1000000000 -- minBound maxBound (too sensitive to overflow, e.g. 2 * minBound == 0)
 
 instance Integral a => ToDomain a where
     toDomain a = toDomain (a, a)
@@ -136,7 +137,7 @@ null (x@(Set xs)) = debug ("[Domain.null] " ++ printDom x) $ IntSet.null xs
 null (x@(Range xl xh)) = debug ("[Domain.null] " ++ printDom x) $ xl > xh
 
 singleton :: Int -> Domain
-singleton x = Set (IntSet.singleton x)
+singleton x = Range x x
 
 isSingleton :: Domain -> Bool
 isSingleton (x@(Set xs)) = debugDom "[Domain.isSingleton]" x $ (IntSet.size xs)==1
@@ -167,6 +168,16 @@ shiftDomain (x@(Set xs)) d = debug ("[Domain.shift] " ++ printDom x) $ Set $ Int
 
 mapDomain :: Domain -> (Int -> [Int]) -> Domain
 mapDomain d f = debug ("[Domain.map] " ++ printDom d) $ Set $ IntSet.fromList $ concatMap f $ elems d
+
+absDomain :: Domain -> Domain
+absDomain d@(Range l u)  | l >= 0     = d
+                         | u <  0     = Range (abs u) (abs l)
+                         | otherwise  = Range 0 (max (abs l) u)
+absDomain d@(Set s)      | IntSet.findMin s >= 0  = d
+                         | otherwise              = Set $ IntSet.map abs s
+
+mirrorDomain :: Domain -> Domain
+mirrorDomain d@(Range l u)   | l <= 0 && u >= 0  = Range (min l (-u)) (max (-l) u)
 
 printDom :: Domain -> String
 printDom (Set cs) = "dom:Set(#" ++ (show $ IntSet.size cs) ++ ")"

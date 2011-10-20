@@ -226,13 +226,13 @@ instance Solver solver => CTransformer (Composition es ts solver a) where
 -- BRANCH & BOUND
 --------------------------------------------------------------------------------
 
-newtype CBranchBoundST (solver :: * -> *) a = CBBST (NewBound solver) 
+newtype CBranchBoundST (solver :: * -> *) a = CBBST (NewBound solver)
 data    BBEvalState solver  = BBP Int (Bound solver)
 
-type Bound    solver  = forall a. Tree solver a -> Tree solver a
+type Bound    solver  = forall a. (Tree solver a -> Tree solver a)
 type NewBound solver  = solver (Bound solver)
 
-instance Solver solver => CTransformer (CBranchBoundST solver a) where
+instance (Solver solver) => CTransformer (CBranchBoundST solver a) where
   type CEvalState (CBranchBoundST solver a) = BBEvalState solver
   type CTreeState (CBranchBoundST solver a) = Int
   type CForSolver (CBranchBoundST solver a) = solver
@@ -240,7 +240,7 @@ instance Solver solver => CTransformer (CBranchBoundST solver a) where
   initCT _  = (BBP 0 id,0)
   nextCT tree c es@(BBP nv bound) v eval continue exit
     | nv > v        = eval (bound tree) es nv
-    | otherwise     = eval tree         es v
+    | otherwise     = eval        tree es v
   returnCT (CBBST newBound) (BBP v bound) continue exit =
     do bound' <- newBound
        continue $ BBP (v + 1) bound' 
