@@ -1,5 +1,5 @@
 Name:			monadiccp
-Version:		0.6
+Version:		0.6.1
 Description:		Monadic Constraint Programming framework
 License:		BSD3
 License-file:		LICENSE
@@ -11,7 +11,7 @@ Synopsis:		Constraint Programming
 Homepage:		http://www.cs.kuleuven.be/~toms/Haskell/
 Bug-reports:		http://trac.haskell.org/monadiccp/
 Cabal-Version:		>=1.6
-Extra-Source-Files: 	examples/*.hs
+Extra-Source-Files: 	examples/*.hs lib/gecodeglue.h
 
 -- examples/Alpha.hs examples/Grocery.hs examples/MagicSquare.hs examples/Olympic.hs examples/Partition.hs examples/Queens.hs examples/Ring.hs examples/StressDomain.hs examples/TryDemo.hs examples/Zebra.hs
 
