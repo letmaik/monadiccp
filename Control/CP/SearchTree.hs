@@ -9,8 +9,14 @@
 
 module Control.CP.SearchTree  where
 
-import Monad
 import Control.CP.Solver
+
+import Control.Monad
+import Control.Monad.Reader
+import Control.Monad.Writer
+import Control.Monad.State
+
+import Data.Monoid
 
 -------------------------------------------------------------------------------
 ----------------------------------- Tree --------------------------------------
@@ -29,8 +35,8 @@ instance Show (Tree s a)  where
   show (Return _) 	= "Return"
   show (Try l r)        = "Try (" ++ show l ++ ") (" ++ show r ++ ")"
   show (Add _ t)        = "Add (" ++ show t ++ ")"
-  show (NewVar _)       = "NewVar"
-  show (Label _)        = "Label"
+  show (NewVar _)       = "NewVar <function>"
+  show (Label _)        = "Label <monadic value>"
 
 instance Solver s => Functor (Tree s) where
 	fmap  = liftM 
@@ -128,6 +134,8 @@ other 	       `insertTree` t  = t /\ other
 
 infixl 2 \/
 
+-- | Generalization of the search tree data type,
+--   allowing monad transformer decoration.
 class (Monad m, Solver (TreeSolver m)) => MonadTree m where
   type TreeSolver m :: * -> *
   addTo  :: Constraint (TreeSolver m) -> m a -> m a
@@ -143,7 +151,6 @@ instance Solver solver => MonadTree (Tree solver) where
   (\/)    =  Try
   exists  =  NewVar
   label   =  Label
-
 
 -------------------------------------------------------------------------------
 ----------------------------------- Sugar -------------------------------------
@@ -183,3 +190,32 @@ prim action = label (action >>= return . return)
 
 add :: MonadTree tree => Constraint (TreeSolver tree) -> tree ()
 add c = c `addTo` true
+
+-------------------------------------------------------------------------------
+--------------------------- Monad Transformer Instances -----------------------
+-------------------------------------------------------------------------------
+
+instance MonadTree t => MonadTree (ReaderT env t) where
+  type TreeSolver (ReaderT env t) = TreeSolver t
+  addTo constraint tree  = ReaderT $ \env -> addTo constraint (runReaderT tree env)
+  false     = lift false
+  l \/ r    = ReaderT $ \env -> runReaderT l env \/ runReaderT r env
+  exists f  = ReaderT $ \env -> exists (\var -> runReaderT (f var) env)
+  label p   = ReaderT $ \env -> label (p >>= \m -> return $ runReaderT m env)
+ 
+
+instance (Monoid w, MonadTree t) => MonadTree (WriterT w t) where
+  type TreeSolver (WriterT w t)  = TreeSolver t
+  addTo constraint tree  = WriterT $ addTo constraint (runWriterT tree)
+  false     = lift false 
+  l \/ r    = WriterT $ runWriterT l \/ runWriterT r
+  exists f  = WriterT $ exists (\var -> runWriterT (f var))
+  label p   = WriterT $ label (p >>= \m -> return $ runWriterT m)
+
+instance MonadTree t => MonadTree (StateT s t) where
+  type TreeSolver (StateT s t) = TreeSolver t
+  addTo constraint tree  = StateT $ \s -> addTo constraint (runStateT tree s)
+  false     = lift false
+  l \/ r    = StateT $ \s -> runStateT l s \/ runStateT r s
+  exists f  = StateT $ \s -> exists (\var -> runStateT (f var) s)
+  label p   = StateT $ \s -> label (p >>= \m -> return $ runStateT m s)

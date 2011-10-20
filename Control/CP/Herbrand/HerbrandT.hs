@@ -21,7 +21,10 @@ import Control.CP.Solver
 import Control.CP.Herbrand.Herbrand (HState, Unify, HTerm,initState,addH,newvarH)
 
 newtype HerbrandT t s a = HerbrandT { unHT :: StateT (HState t (HerbrandT t s)) s a }
-  deriving Monad
+
+instance Monad s => Monad (HerbrandT t s) where
+  return   = HerbrandT . return
+  m >>= f  = HerbrandT $ unHT m >>= unHT . f 
 
 instance MonadTrans (HerbrandT t) where
   lift = HerbrandT . lift
