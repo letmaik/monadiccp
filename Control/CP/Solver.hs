@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -fglasgow-exts #-}
 {-
  - The Solver class, a generic interface for constraint solvers.
  -
@@ -6,7 +5,24 @@
  - 	http://www.cs.kuleuven.be/~toms/Haskell/
  - 	Tom Schrijvers
  -}
-module Control.CP.Solver where 
+
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances #-}
+
+module Control.CP.Solver (
+  Solver,
+  Constraint,
+  Label,
+  add,
+  run,
+  mark,
+  goto,
+  Term,
+  newvar,
+  Help,
+  help
+) where 
 
 import Control.Monad.Writer
 import Data.Monoid
@@ -17,7 +33,7 @@ class Monad solver => Solver solver where
  	-- | the labels
 	type Label solver	:: *
 	-- | add a constraint to the current state, and
-	--   return whethe the resulting state is consistent
+	--   return whether the resulting state is consistent
 	add		:: Constraint solver -> solver Bool
 	-- | run a computation
 	run		:: solver a -> a
@@ -26,10 +42,13 @@ class Monad solver => Solver solver where
 	-- | go to the state with given label
 	goto		:: Label solver -> solver ()
 
-class Solver solver => Term solver term where
+class (Solver solver) => Term solver term where
 	-- | produce a fresh constraint variable
 	newvar 	:: solver term
-  
+
+        type Help solver term
+        help :: solver () -> term -> Help solver term
+
 -- | WriterT decoration of a solver
 --   useful for producing statistics during solving
 instance (Monoid w, Solver s) => Solver (WriterT w s) where
@@ -42,3 +61,6 @@ instance (Monoid w, Solver s) => Solver (WriterT w s) where
 
 instance (Monoid w, Term s t) => Term (WriterT w s) t where
   newvar  = lift newvar
+  type Help (WriterT w s) t = ()
+  help _ _ = ()
+

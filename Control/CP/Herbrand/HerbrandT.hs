@@ -1,4 +1,3 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -49,6 +48,10 @@ data R a = R a
 
 instance (HTerm t, Solver s) => Term (HerbrandT t s) (L t) where
   newvar  = newvarH >>= return . L 
+  type Help (HerbrandT t s) (L t) = ()
+  help _ _ = ()
 
 instance (HTerm t, Solver s, Term s st) => Term (HerbrandT t s) (R st) where
   newvar  = lift newvar >>= return . R
+  type Help (HerbrandT t s) (R st) = ()
+  help _ _ = ()

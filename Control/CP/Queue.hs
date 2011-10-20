@@ -9,7 +9,14 @@
  - 	Tom Schrijvers
  -}
 
-module Control.CP.Queue where
+module Control.CP.Queue (
+  Queue,
+  Elem,
+  emptyQ,
+  isEmptyQ,
+  popQ,
+  pushQ
+) where
 
 import qualified Data.Sequence
 import qualified Control.CP.PriorityQueue as PriorityQueue
@@ -32,7 +39,9 @@ instance Queue (Data.Sequence.Seq a) where
   type Elem (Data.Sequence.Seq a)  = a
   emptyQ _                   = Data.Sequence.empty
   isEmptyQ                   = Data.Sequence.null 
-  popQ (Data.Sequence.viewl -> x Data.Sequence.:< xs)  = (x,xs)
+--  popQ (Data.Sequence.viewl -> x Data.Sequence.:< xs)  = (x,xs)
+  popQ l                     = case Data.Sequence.viewl l of
+    x Data.Sequence.:< xs -> (x,xs)
   pushQ                      = flip (Data.Sequence.|>)
 
 instance Ord a => Queue (PriorityQueue.PriorityQueue a (a,b,c)) where

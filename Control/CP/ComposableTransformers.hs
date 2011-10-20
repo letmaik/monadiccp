@@ -3,18 +3,35 @@
  - 	http://www.cs.kuleuven.be/~toms/Haskell/
  - 	Tom Schrijvers
  -}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ImpredicativeTypes #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module Control.CP.ComposableTransformers where 
+module Control.CP.ComposableTransformers (
+  solve, 
+  NewBound, 
+  CTransformer, 
+  CForSolver, 
+  CForResult, 
+  CTreeState, 
+  RestartST(..) , 
+  SealedCST(..), 
+  CNodeBoundedST(..), 
+  CDepthBoundedST(..),
+  CBranchBoundST(..),
+  CFirstSolutionST(..),
+  CIdentityCST(..),
+  CRandomST(..),
+  CLimitedDiscrepancyST(..)
+) where 
 
 import Control.CP.Transformers
 import Control.CP.SearchTree
 import Control.CP.Solver
 import Control.CP.Queue
+import Control.CP.Debug
 
 import System.Random (mkStdGen, randoms)
 

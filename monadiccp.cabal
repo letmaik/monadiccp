@@ -1,15 +1,41 @@
-Name:                monadiccp
-Version:             0.5.2
-Description:         Monadic Constraint Programming framework
-License:             BSD3
-License-file:        LICENSE
-Author:              Tom Schrijvers 
-Maintainer:          tom.schrijvers@cs.kuleuven.be
-Build-Depends:       base, containers, mtl, haskell98, random
-Build-Type:          Simple
-Exposed-modules:     Control.CP.ComposableTransformers  Control.CP.PriorityQueue  Control.CP.Queue  Control.CP.Solver  Control.CP.SearchTree  Control.CP.Transformers Control.CP.FD.Domain Control.CP.FD.FD Control.CP.FD.FDSugar Control.CP.Herbrand.Herbrand Control.CP.Herbrand.PrologTerm Control.CP.Herbrand.Prolog Control.CP.Herbrand.HerbrandT
-ghc-options:         
-Category:            control
-Synopsis:	     Constraint Programming
-Homepage:            http://www.cs.kuleuven.be/~toms/Haskell/
-bug-reports:         http://trac.haskell.org/monadiccp/
+Name:			monadiccp
+Version:		0.6
+Description:		Monadic Constraint Programming framework
+License:		BSD3
+License-file:		LICENSE
+Author:			Tom Schrijvers, Pieter Wuille
+Maintainer:		tom.schrijvers@cs.kuleuven.be
+Build-Type:		Simple
+Category:		control
+Synopsis:		Constraint Programming
+Homepage:		http://www.cs.kuleuven.be/~toms/Haskell/
+Bug-reports:		http://trac.haskell.org/monadiccp/
+Cabal-Version:		>=1.6
+Extra-Source-Files: 	examples/*.hs
+
+-- examples/Alpha.hs examples/Grocery.hs examples/MagicSquare.hs examples/Olympic.hs examples/Partition.hs examples/Queens.hs examples/Ring.hs examples/StressDomain.hs examples/TryDemo.hs examples/Zebra.hs
+
+Flag RuntimeGecode
+    Description:	Include the RuntimeSolver and SearchSolver for Gecode. Requires a working Gecode 3.1 installation.
+    Default:		False
+
+Flag Debug
+    Description:	Generate debug output
+    Default:		False
+
+library
+    Build-Depends:	base >= 2 && < 4, containers, mtl, haskell98, random
+    Exposed-Modules:	Control.CP.SearchTree Control.CP.Transformers Control.CP.FD.Gecode.Common Control.CP.FD.Gecode.Translate Control.CP.FD.Gecode.CodegenSolver Control.CP.FD.OvertonFD.Sugar Control.CP.FD.OvertonFD.OvertonFD Control.CP.FD.Solvers Control.CP.FD.FD Control.CP.FD.Example.Example Control.CP.FD.Expr Control.CP.Solver Control.CP.ComposableTransformers Control.CP.EnumTerm Control.CP.PriorityQueue Control.CP.Mixin Control.CP.Herbrand.PrologTerm Control.CP.Herbrand.Prolog Control.CP.Herbrand.Herbrand Control.CP.Herbrand.HerbrandT Control.CP.Queue
+    Other-Modules:	Control.CP.Debug Control.CP.FD.OvertonFD.Domain
+    Include-Dirs:	lib
+    if flag(Debug)
+        CPP-Options:	-DDEBUG
+        CC-Options:	"-O1" "-ggdb3"
+    else
+        CC-Options:	"-O3" "-g0" "-DNDEBUG"
+    if flag(RuntimeGecode)
+        C-Sources:		lib/gecodeglue.cpp
+        Extra-Libraries:	gecodesupport gecodeset gecodeint gecodekernel gecodesearch
+        Exposed-Modules:	Control.CP.FD.Gecode.RuntimeSolver
+        Other-Modules:		Control.CP.FD.Gecode.Interface
+        CPP-Options:		-DRGECODE

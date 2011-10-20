@@ -30,6 +30,8 @@ instance Solver Prolog where
 
 instance Term Prolog PrologTerm where
   newvar  = Prolog $ newvar
+  type Help Prolog PrologTerm = ()
+  help _ _ = ()
 
 data PConstraint = PrologTerm := PrologTerm
                  | NotFunctor PrologTerm String 

@@ -1,13 +1,25 @@
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE PatternGuards #-}
 -- |This module provides a Herbrand solver.
 --
 --  The type of terms is parameterized by the "HTerm" type class.
-module Control.CP.Herbrand.Herbrand where 
+module Control.CP.Herbrand.Herbrand (
+  HTerm(..),
+  Herbrand(..),
+  failure,
+  success,
+  unify,
+  shallow_normalize,
+  registerAction,
+  HState,
+  Unify,
+  initState,
+  addH,
+  newvarH
+) where 
 
 import Control.Monad.State.Lazy
 import Control.Applicative
@@ -80,7 +92,8 @@ instance HTerm t => Solver (Herbrand t) where
 
 instance HTerm t => Term (Herbrand t) t where
   newvar  = newvarH
-
+  type Help (Herbrand t) t = ()
+  help _ _ = ()
 
 initState :: HTerm t => HState t m
 initState = HState varSupply Data.Map.empty

@@ -1,9 +1,8 @@
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
-module Control.CP.Herbrand.PrologTerm  where 
+module Control.CP.Herbrand.PrologTerm (
+  PrologTerm(..)
+) where 
 
 import Data.List (intersperse)
 

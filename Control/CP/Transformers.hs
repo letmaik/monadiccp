@@ -6,11 +6,19 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE Rank2Types #-}
-module Control.CP.Transformers where 
+module Control.CP.Transformers (
+  eval,
+  eval',
+  continue,
+  NodeBoundedST,
+  DepthBoundedST,
+  Transformer(..),
+) where 
 
 import Control.CP.Solver
 import Control.CP.SearchTree
 import Control.CP.Queue
+import Control.CP.Debug
 
 --------------------------------------------------------------------------------
 -- EVALUATION
@@ -19,8 +27,9 @@ import Control.CP.Queue
 eval :: (Solver solver, Queue q, Elem q ~ (Label solver,Tree solver (ForResult t),TreeState t), Transformer t,
          ForSolver t ~ solver) 
      => Tree solver (ForResult t) -> q -> t -> solver (Int,[ForResult t])
-eval tree q t  = do (es,ts) <- initT t tree
-                    eval' 0 tree q t es ts
+eval tree q t  = debug "eval" $ 
+                   do (es,ts) <- initT t tree
+                      eval' 0 tree q t es ts
 
 eval' :: SearchSig solver q t (ForResult t) 
 eval' i (Return x) wl t es ts  = do (j,xs) <- returnT (i+1) wl t es
@@ -28,7 +37,7 @@ eval' i (Return x) wl t es ts  = do (j,xs) <- returnT (i+1) wl t es
 eval' i (Add c k)  wl t es ts = do b <- Control.CP.Solver.add c 
                                    if b then eval' (i+1) k wl t es ts
                                         else continue (i+1) wl t es
-eval' i (NewVar f) wl t es ts = do v <- newvar 
+eval' i (NewVar f) wl t es ts = do v <- newvar
                                    eval' (i+1) (f v) wl t es ts
 eval' i (Try l r)  wl t es ts  = 
   do now <- mark 
