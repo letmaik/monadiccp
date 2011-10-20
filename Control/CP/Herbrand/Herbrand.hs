@@ -18,11 +18,15 @@ import Control.CP.Solver
 
 -- |Herbrand terms
 
-type VarId = Int
+-- type VarId = Int
 
-class HTerm t where
-  mkVar    :: VarId -> t
-  isVar    :: t   -> Maybe VarId
+class Ord (VarId t) => HTerm t where
+  type VarId t :: *
+  data VarSupply t :: *
+  varSupply :: VarSupply t
+  supplyVar :: VarSupply t -> (t, VarSupply t)
+  mkVar    :: VarId t -> t
+  isVar    :: t   -> Maybe (VarId t)
   children :: t -> ([t], [t] -> t)
   nonvar_unify
         :: (MonadState (HState t m) m) => t -> t -> m Bool
@@ -50,15 +54,15 @@ instance Applicative (Herbrand t) where
 
 -- |State
 
-type Heap t m   = Map VarId (Binding t m)
+type Heap t m   = Map (VarId t) (Binding t m)
 
 data Binding t m 
-  = VAR VarId 		-- | indirection to other variable
-  | NONVAR t 		-- | bound to term
-  | ACTION (m Bool)	-- | attributed variable, with given action
+  = VAR (VarId t)	-- ^ indirection to other variable
+  | NONVAR t 		-- ^ bound to term
+  | ACTION (m Bool)	-- ^ attributed variable, with given action
 
-data HState t m = HState {var_supply :: VarId
-                         ,heap       :: Heap t m
+data HState t m = HState { var_supply :: VarSupply t
+                         , heap       :: Heap t m
                          }
 
 updateState :: (HTerm t, MonadState (HState t m) m) => (HState t m -> HState t m) -> m ()
@@ -78,15 +82,17 @@ instance HTerm t => Term (Herbrand t) t where
   newvar  = newvarH
 
 
-initState = HState 0 Data.Map.empty
+initState :: HTerm t => HState t m
+initState = HState varSupply Data.Map.empty
 
 -- New variable
 
 newvarH :: (HTerm t,MonadState (HState t m) m) => m t
 newvarH = do state <- get
-             let varid = var_supply state
-             put state{var_supply = varid + 1}
-             return $ mkVar varid
+             let vs = var_supply state
+             let (var,vs') = supplyVar vs
+             put state{var_supply = vs'}
+             return  var
 
 {- Representatin of variables
    --------------------------
@@ -127,7 +133,7 @@ failure  = return False
 m1 `andM` m2  = m1 >>= \b -> if b then m2 else return b 
 
 -- | bind a variable to a term
-bindt :: (HTerm t, MonadState (HState t m) m) => VarId -> t -> m Bool
+bindt :: (HTerm t, MonadState (HState t m) m) => VarId t -> t -> m Bool
 bindt v t  = do r <- lookupVar v
                 updater v (NONVAR t)
                 case r of
@@ -135,7 +141,7 @@ bindt v t  = do r <- lookupVar v
                   Nothing              -> success
 
 -- | alias one variable to another
-bindv :: (HTerm t, MonadState (HState t m) m) => VarId -> VarId -> m Bool
+bindv :: (HTerm t, MonadState (HState t m) m) => VarId t -> VarId t -> m Bool
 bindv v1 v2  = do r1 <- lookupVar v1
                   r2 <- lookupVar v2
                   case (r1,r2) of

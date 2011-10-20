@@ -9,10 +9,14 @@ import Data.List (intersperse)
 
 import Control.CP.Herbrand.Herbrand
 
-data PrologTerm = PTerm String [PrologTerm] | PVar VarId
+data PrologTerm = PTerm String [PrologTerm] | PVar Int
      deriving Eq
 
 instance HTerm PrologTerm where
+  type VarId PrologTerm = Int
+  newtype VarSupply PrologTerm = VSPT Int
+  supplyVar (VSPT n)  = (mkVar n, VSPT (n+1))
+  varSupply       = VSPT 0
   mkVar           = PVar
   isVar (PVar v)  = Just v
   isVar _         = Nothing
