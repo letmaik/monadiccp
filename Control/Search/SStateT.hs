@@ -1,4 +1,7 @@
-{-# OPTIONS -fglasgow-exts #-}
+-- {-# OPTIONS -fglasgow-exts #-}
+
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
 module Control.Search.SStateT (
   SStateT, sstateT, runSStateT,

@@ -1,4 +1,9 @@
-{-# OPTIONS -fglasgow-exts -XNoMonomorphismRestriction #-}
+-- {-# OPTIONS -fglasgow-exts -XNoMonomorphismRestriction #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverlappingInstances #-}

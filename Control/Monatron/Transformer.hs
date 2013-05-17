@@ -17,7 +17,7 @@ module Control.Monatron.Transformer (
 import Control.Monad.Fix
 import Control.Monatron.MonadT
 -- for Writer
-import Data.Monoid
+import Data.Monoid hiding ((<>))
 -- for Error (and Reader?)
 --import Monatron.Codensity
 import Control.Monatron.AutoInstances()

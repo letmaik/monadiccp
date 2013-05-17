@@ -1,4 +1,10 @@
-{-# OPTIONS -fglasgow-exts -XNoMonomorphismRestriction -XOverlappingInstances #-}
+-- {-# OPTIONS -fglasgow-exts -XNoMonomorphismRestriction -XOverlappingInstances #-}
+
+{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE OverlappingInstances #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 module Control.Monatron.Open where
 

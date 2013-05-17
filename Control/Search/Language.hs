@@ -3,7 +3,7 @@
 module Control.Search.Language  where 
 
 import Text.PrettyPrint
-import Data.Monoid
+import Data.Monoid hiding ((<>))
 import Data.Int
 import qualified Data.Map as Map
 import Data.Map (Map)

@@ -42,7 +42,7 @@ module Control.CP.FD.Interface (
 --  Modelable,
 ) where
 
-import Control.CP.FD.FD hiding (allDiff)
+import Control.CP.FD.FD (FDSolver, FDInstance, FDIntTerm, getColItems)
 import qualified Control.CP.FD.Model as Model
 import Control.CP.FD.Model (Model, ModelBool, ModelCol, ModelInt, ToModelBool, asBool, asExpr, asCol, cte, newModelTerm, ModelIntArg, ModelBoolArg, ModelColArg)
 import qualified Data.Expr.Sugar as Sugar
@@ -144,7 +144,7 @@ instance ModelExprClass (Tree DummySolver ()) where
 (@<=) a b = addM $ (Sugar.@<=) a b
 
 val :: Tree DummySolver () -> ModelInt
-val = toExpr . treeToModel
+val = Sugar.toExpr . treeToModel
 
 {- newBool :: (Constraint s ~ Either Model q, MonadTree m, TreeSolver m ~ s) => (ModelBool -> Tree DummySolver a) -> m a
 newBool = exists
@@ -207,7 +207,7 @@ labelCol col = label $ do
 
 infix 5 @:
 
-(@:) :: (Constraint s ~ Either Model q, MonadTree m, TreeSolver m ~ s, ExprRange ModelIntArg ModelColArg ModelBoolArg r, Term s ModelInt, Term s ModelBool, Term s ModelCol) => ModelInt -> r -> m ()
+(@:) :: (Constraint s ~ Either Model q, MonadTree m, TreeSolver m ~ s, Sugar.ExprRange ModelIntArg ModelColArg ModelBoolArg r, Term s ModelInt, Term s ModelBool, Term s ModelCol) => ModelInt -> r -> m ()
 a @: b = addM $ (Sugar.@:) a b
 
 infix 4 @?
@@ -216,5 +216,5 @@ infix 4 @??
 a @? (t,f) = (Sugar.@?) (treeToModel a) (t,f)
 a @?? (t,f) = addM $ (Sugar.@??) (treeToModel a) (treeToModel t, treeToModel f)
 
-allin :: (Constraint s ~ Either Model q, MonadTree m, TreeSolver m ~ s, ExprRange ModelIntArg ModelColArg ModelBoolArg r, Term s ModelInt, Term s ModelBool, Term s ModelCol) => ModelCol -> r -> m ()
+allin :: (Constraint s ~ Either Model q, MonadTree m, TreeSolver m ~ s, Sugar.ExprRange ModelIntArg ModelColArg ModelBoolArg r, Term s ModelInt, Term s ModelBool, Term s ModelCol) => ModelCol -> r -> m ()
 allin c b = Control.CP.FD.Interface.forall c $ \x -> addM $ (Sugar.@:) x b

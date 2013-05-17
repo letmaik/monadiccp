@@ -23,9 +23,9 @@ import Data.Map(Map)
 
 data (Ord t, Num v) => Linear t v = Linear v (Map t v)
 
-deriving instance (Num v, Ord t, Eq t) => Eq (Linear t v)
+deriving instance (Num v, Eq v, Ord t, Eq t) => Eq (Linear t v)
 deriving instance (Num v, Ord v, Ord t, Eq t) => Ord (Linear t v)
-deriving instance (Num v, Ord t, Show t) => Show (Linear t v)
+deriving instance (Num v, Show v, Ord t, Show t) => Show (Linear t v)
 
 termToLinear :: (Num v, Ord t) => t -> Linear t v
 termToLinear x = Linear 0 $ Map.singleton x 1
@@ -52,10 +52,10 @@ getCoef :: (Num v, Ord t) => Maybe t -> Linear t v -> v
 getCoef Nothing (Linear c _) = c
 getCoef (Just t) (Linear _ m) = Map.findWithDefault 0 t m
 
-linearMult :: (Num v, Ord t) => v -> Linear t v -> Linear t v
+linearMult :: (Num v, Eq v, Ord t) => v -> Linear t v -> Linear t v
 linearMult m (Linear ac am) = Linear (m*ac) $ if (m==0) then Map.empty else Map.filter (/=0) $ Map.map (m*) am
 
-linearMultiply :: (Num v, Ord t) => Linear t v -> Linear t v -> Maybe (Linear t v)
+linearMultiply :: (Num v, Eq v, Ord t) => Linear t v -> Linear t v -> Maybe (Linear t v)
 linearMultiply (Linear ac am) bl | (Map.null am) = Just $ linearMult ac bl
 linearMultiply bl (Linear ac am) | (Map.null am) = Just $ linearMult ac bl
 linearMultiply _ _ = Nothing
@@ -64,13 +64,13 @@ linearToConst :: (Num v, Ord t) => Linear t v -> Maybe v
 linearToConst (Linear c m) | Map.null m = Just c
 linearToConst _ = Nothing
 
-linearToTerm :: (Num v, Ord t) => Linear t v -> Maybe t
+linearToTerm :: (Num v, Eq v, Ord t) => Linear t v -> Maybe t
 linearToTerm (Linear c m) | (c==0 && (Map.size m)==1) = 
   let (t,v) = Map.findMin m
       in if (v==1) then Just t else Nothing
 linearToTerm _ = Nothing
 
-instance (Num v, Ord t, Eq t, Show t) => Num (Linear t v) where
+instance (Num v, Eq v, Ord t, Eq t, Show t) => Num (Linear t v) where
   (Linear ac am) + (Linear bc bm) = Linear (ac+bc) $ Map.filter (/=0) $ Map.unionWith (+) am bm
   (Linear ac am) - (Linear bc bm) = Linear (ac-bc) $ Map.filter (/=0) $ Map.unionWith (+) am $ Map.map negate bm
   a * b = case linearMultiply a b of Just x -> x; Nothing -> error "Cannot multiply generic linear expressions"

@@ -14,7 +14,6 @@ module Data.Expr.Sugar (
   (@||), (@&&), inv,
   (@/=), (@>), (@<), (@>=), (@<=), (@=), 
   loopall, loopany, forall, forany,
-  ExprClass,
   Expr(), ColExpr(), BoolExpr(),
   ToExpr(..), ToColExpr(..), ToBoolExpr(..),
   sorted, sSorted, allDiff, allDiffD,
