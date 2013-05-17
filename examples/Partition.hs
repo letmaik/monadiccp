@@ -2,6 +2,9 @@
 {-# LANGUAGE FlexibleContexts #-}
 
 import Control.CP.FD.Example
+import Control.CP.SearchTree
+import Control.CP.Solver
+import Control.CP.FD.Interface
 
 model :: ExampleModel ModelInt
 model n =

@@ -821,7 +821,7 @@ typedef struct {
 } gecode_search_data_t;
 
 gecode_search_data_t static *gecode_search_create(HaskellModel *model, gecode_search_type typ) {
-  Search::Options o = Search::Options::Options();
+  Search::Options o = Search::Options();
   o.c_d = 1;
   gecode_search_data_t *srch=new gecode_search_data_t;
 #ifndef NDEBUG
@@ -877,6 +877,8 @@ extern "C" HaskellModel *gecode_search_next(gecode_search_data_t *srch) {
       res=srch->dat.bab->next();
       break;
     }
+    default:
+    res=NULL;
   }
 #ifndef NDEBUG
   cerr << "[search " << srch << "] requested next (" << res << ")\n";

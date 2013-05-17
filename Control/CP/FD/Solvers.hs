@@ -52,6 +52,8 @@ db :: Int -> CDepthBoundedST s a
 db = CDBST
 bb :: NewBound s -> CBranchBoundST s a
 bb = CBBST
+sb :: Int -> CSolutionBoundST s a
+sb = CSBST
 fs :: CFirstSolutionST s a
 fs = CFSST
 it :: CIdentityCST s a

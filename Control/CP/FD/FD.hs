@@ -4,8 +4,6 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE Rank2Types #-}
 
 module Control.CP.FD.FD (
   module Data.Expr.Sugar,
@@ -174,7 +172,7 @@ getMinimizeTerm = do
 --        put s { fdsMinimizeTerm = Just q }
 --        return $ Just q
 
-boundMinimize :: forall s. (Show (FDIntTerm s), FDSolver s, EnumTerm s (FDIntTerm s), Integral (TermBaseType s (FDIntTerm s))) => NewBound (FDInstance s)
+boundMinimize :: (Show (FDIntTerm s), FDSolver s, EnumTerm s (FDIntTerm s), Integral (TermBaseType s (FDIntTerm s))) => NewBound (FDInstance s)
 boundMinimize = do
   bound <- getMinimizeTerm
   case bound of
@@ -184,9 +182,8 @@ boundMinimize = do
       case x of
         Just val -> do
           con <- liftFD $ fdConstrainIntTerm bndvar (toInteger val)
-          (let f :: Bound (FDInstance s)
-               f = \x -> (Add (Right con) x)
-           in (return :: Bound (FDInstance s) -> NewBound (FDInstance s)) (f :: Bound (FDInstance s)) :: NewBound (FDInstance s))
+          let f = Bound (\x -> (Add (Right con) x))
+          return f
         _ -> error "bound variable is not assigned"
 
 runFD :: FDSolver s => FDInstance s a -> s a
@@ -754,27 +751,35 @@ fdSpecInfo_edge f = do
 --      colX v = FDSpecInfoCol { fdspColSpec = an $ colS v, fdspColVar = Just v, fdspColVal = getColVal_ v s, fdspColTypes = Set.fromList $ Map.keys $ colS v }
   return (map boolS $ boolData $ egeLinks edge, map intS $ intData $ egeLinks edge, map colS $ colData $ egeLinks edge)
 
-fdSpecInfo_spec 
-  :: forall s. FDSolver s 
-  => ([Either (FDSpecInfoBool s) (FDBoolSpecType s,FDBoolSpec s)]
-     ,[Either (FDSpecInfoInt s) (FDIntSpecType s,FDIntSpec s)]
-     ,[Either (FDSpecInfoCol s) (FDColSpecType s,FDColSpec s)]) 
-  -> FDSpecInfo s
-fdSpecInfo_spec (b,i,c) =
-  (map fb b, map fi i, map fc c)
-  where
-    fb :: Either (FDSpecInfoBool s) (FDBoolSpecType s, FDBoolSpec s) -> FDSpecInfoBool s
-    fb (Left x)  = x
-    fb (Right x) = FDSpecInfoBool { fdspBoolSpec = nt x, fdspBoolVar = Nothing, fdspBoolVal = Nothing, fdspBoolTypes = Set.singleton $ fst x }
-    fi :: Either (FDSpecInfoInt s) (FDIntSpecType s, FDIntSpec s) -> FDSpecInfoInt s
-    fi (Right x) = FDSpecInfoInt  { fdspIntSpec  = nt x, fdspIntVar  = Nothing, fdspIntVal  = Nothing, fdspIntTypes = Set.singleton $ fst x }
-    fi (Left x) = x
-    fc (Right x) = FDSpecInfoCol  { fdspColSpec  = nt x, fdspColVar  = Nothing, fdspColVal  = Nothing, fdspColTypes = Set.singleton $ fst x }
-    fc (Left x) = x
-    nt :: forall a b. Eq a => (a,b) -> Maybe a ->  Maybe b
-    nt (_,x)  Nothing   = Just x
-    nt (t1,x) (Just t2) | t1==t2 = Just x
-    nt _      _         = Nothing
+fdSpecInfo_spec :: FDSolver s => ([Either (FDSpecInfoBool s) (FDBoolSpecType s,FDBoolSpec s)],[Either (FDSpecInfoInt s) (FDIntSpecType s,FDIntSpec s)],[Either (FDSpecInfoCol s) (FDColSpecType s,FDColSpec s)]) -> FDSpecInfo s
+fdSpecInfo_spec (b,i,c) = (fdSpecInfo_spec_b b, fdSpecInfo_spec_i i, fdSpecInfo_spec_c c)
+
+fdSpecInfo_spec_b :: FDSolver s => [Either (FDSpecInfoBool s) (FDBoolSpecType s,FDBoolSpec s)] -> [FDSpecInfoBool s]
+fdSpecInfo_spec_b b =
+  let fb (Right x) = FDSpecInfoBool { fdspBoolSpec = nt x, fdspBoolVar = Nothing, fdspBoolVal = Nothing, fdspBoolTypes = Set.singleton $ fst x }
+      fb (Left x) = x
+      nt (_,x) Nothing = Just x
+      nt (t1,x) (Just t2) | t1==t2 = Just x
+      nt _ _ = Nothing
+  in (map fb b)
+
+fdSpecInfo_spec_i :: FDSolver s => [Either (FDSpecInfoInt s) (FDIntSpecType s,FDIntSpec s)] -> [FDSpecInfoInt s]
+fdSpecInfo_spec_i i =
+  let fi (Right x) = FDSpecInfoInt  { fdspIntSpec  = nt x, fdspIntVar  = Nothing, fdspIntVal  = Nothing, fdspIntTypes = Set.singleton $ fst x }
+      fi (Left x) = x
+      nt (_,x) Nothing = Just x
+      nt (t1,x) (Just t2) | t1==t2 = Just x
+      nt _ _ = Nothing
+  in (map fi i)
+
+fdSpecInfo_spec_c :: FDSolver s => [Either (FDSpecInfoCol s) (FDColSpecType s,FDColSpec s)] -> [FDSpecInfoCol s]
+fdSpecInfo_spec_c c =
+  let fc (Right x) = FDSpecInfoCol  { fdspColSpec  = nt x, fdspColVar  = Nothing, fdspColVal  = Nothing, fdspColTypes = Set.singleton $ fst x }
+      fc (Left x) = x
+      nt (_,x) Nothing = Just x
+      nt (t1,x) (Just t2) | t1==t2 = Just x
+      nt _ _ = Nothing
+  in (map fc c)
 
 -- | A solver needs to be an instance of this FDSolver class in order to
 -- create an FDInstance around it.

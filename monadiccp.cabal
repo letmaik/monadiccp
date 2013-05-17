@@ -1,5 +1,5 @@
 Name:			monadiccp
-Version:		0.7.1
+Version:		0.7.2
 Description:		Monadic Constraint Programming framework
 License:		BSD3
 License-file:		LICENSE
@@ -9,6 +9,7 @@ Build-Type:		Simple
 Category:		control
 Synopsis:		Constraint Programming
 Homepage:		http://users.ugent.be/~tschrijv/MCP/
+Bug-reports:		http://trac.haskell.org/monadiccp/
 Cabal-Version:		>=1.6
 Extra-Source-Files: 	examples/*.hs lib/*.cpp lib/*.h
 
@@ -23,7 +24,7 @@ Flag Debug
     Default:		False
 
 library
-    Build-Depends:	base >= 2, base < 5, containers, mtl, haskell98, random, pretty, Monatron >= 0.3
+    Build-Depends:	base >= 2, base < 5, containers, mtl, haskell98, random, pretty, parsec >= 3.0
     Exposed-Modules:	Data.Expr.Sugar
                         Control.CP.SearchTree
                         Control.CP.Transformers
@@ -39,21 +40,56 @@ library
                         Control.CP.FD.Gecode.CodegenSolver
                         Control.CP.FD.Model
                         Control.CP.FD.Example
+                        Control.CP.FD.FD
+                        Control.CP.FD.Gecode.Common
     Other-Modules:	Data.Expr.Data
                         Data.Expr.Util
                         Data.Linear
-                        Control.CP.FD.Gecode.Common
                         Control.CP.FD.OvertonFD.Domain
                         Control.CP.FD.SimpleFD
                         Control.CP.FD.Graph
                         Control.CP.FD.Decompose
-                        Control.CP.FD.FD
+                        Control.CP.FD.SearchSpec.Data
                         Control.CP.Debug
                         Control.Mixin.Mixin
-                        Control.CP.SearchSpec.Language
-                        Control.CP.SearchSpec.Generator
                         Language.CPP.Syntax.AST
                         Language.CPP.Pretty
+                        Control.Search.Language
+                        Control.Search.Stat
+                        Control.Search.Generator
+                        Control.Search.Combinator.For
+                        Control.Search.Combinator.Until
+                        Control.Search.Combinator.If
+                        Control.Search.Combinator.OrRepeat
+                        Control.Search.Combinator.Let
+                        Control.Search.Combinator.Success
+                        Control.Search.Combinator.Base
+                        Control.Search.Combinator.Failure
+                        Control.Search.Combinator.Once
+                        Control.Search.Combinator.And
+                        Control.Search.Combinator.Repeat
+                        Control.Search.Combinator.Or
+                        Control.Search.Combinator.Post
+                        Control.Search.Combinator.Misc
+                        Control.Search.Combinator.Print
+                        Control.Search.Memo
+                        Control.Search.GeneratorInfo
+                        Control.Search.Constraints
+                        Control.Search.MemoReader
+                        Control.Search.SStateT
+                        Control.Monatron.Monatron
+                        Control.Monatron.MonadInfo
+                        Control.Monatron.AutoLift
+                        Control.Monatron.Operations
+                        Control.Monatron.Zipper
+                        Control.Monatron.IdT
+                        Control.Monatron.Codensity
+                        Control.Monatron.Transformer
+                        Control.Monatron.Open
+                        Control.Monatron.AutoInstances
+                        Control.Monatron.MonadT
+                        Control.Monatron.Monad
+                        Control.Monatron.ZipperExamples
     GHC-Prof-Options:	-auto-all -caf-all
     Include-Dirs:	lib
     if flag(Debug)
@@ -66,6 +102,6 @@ library
         Extra-Libraries:	gecodesupport gecodeset gecodeint gecodekernel gecodesearch
         Exposed-Modules:	Control.CP.FD.Gecode.Runtime
                                 Control.CP.FD.Gecode.RuntimeSearch
-        Other-Modules:		Control.CP.FD.Gecode.Interface
+                                Control.CP.FD.Gecode.Interface
         CPP-Options:		-DRGECODE
         Frameworks:		gecode

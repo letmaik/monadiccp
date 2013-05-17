@@ -36,7 +36,7 @@ module Control.CP.FD.Interface (
   Control.CP.FD.Interface.loopany,
   allin,
   asExpr, asCol, Control.CP.FD.Interface.asBool,
-  colList, labelCol,
+  colList, labelCol, 
   ModelInt, ModelCol, ModelBool,
   exists, true, false,
 --  Modelable,
@@ -54,8 +54,6 @@ import Control.CP.SearchTree
 import Control.CP.EnumTerm
 
 newtype DummySolver a = DummySolver ()
-
-type MModel s = Either Model (Constraint s)
 
 instance Monad DummySolver where
   return _ = DummySolver ()

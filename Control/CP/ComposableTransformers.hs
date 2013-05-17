@@ -8,12 +8,12 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ImpredicativeTypes #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 
 module Control.CP.ComposableTransformers (
-  solve, 
+  solve, restart,
   NewBound, 
-  Bound,
+  Bound(..),
+  Composition(..),
   CTransformer, 
   CForSolver, 
   CForResult, 
@@ -24,6 +24,7 @@ module Control.CP.ComposableTransformers (
   CDepthBoundedST(..),
   CBranchBoundST(..),
   CFirstSolutionST(..),
+  CSolutionBoundST(..),
   CIdentityCST(..),
   CRandomST(..),
   CLimitedDiscrepancyST(..)
@@ -45,6 +46,13 @@ solve :: (Queue q, Solver solver, CTransformer c, CForSolver c ~ solver,
           Elem q ~ (Label solver,Tree solver (CForResult c),CTreeState c)) 
       => q -> c -> Tree solver (CForResult c) -> (Int,[CForResult c])
 solve q c model = run $ eval model q (TStack c)
+
+
+restart :: (Queue q, Solver solver, CTransformer c, CForSolver c ~ solver,
+          Elem q ~ (Label solver,Tree solver (CForResult c),CTreeState c)) 
+      => q -> [c] -> Tree solver (CForResult c) -> (Int,[CForResult c])
+restart q cs model = run $ eval model q (RestartST (map Seal cs) return)
+
 
 --------------------------------------------------------------------------------
 -- COMPOSABLE TRANSFORMERS
@@ -192,6 +200,17 @@ instance Solver solver => CTransformer (CFirstSolutionST solver a) where
     exit False
   completeCT _ es = es 
 
+data CSolutionBoundST (solver :: * -> *) a = CSBST Int
+
+instance Solver solver => CTransformer (CSolutionBoundST solver a) where
+  type CEvalState (CSolutionBoundST solver a) = Int
+  type CTreeState (CSolutionBoundST solver a) = ()
+  type CForSolver (CSolutionBoundST solver a) = solver
+  type CForResult (CSolutionBoundST solver a) = a
+  initCT (CSBST n) = (n,())
+  returnCT _ 1 continue exit = exit 0
+  returnCT _ n continue exit = continue (n-1)
+  completeCT _ es = es==0
 
 --------------------------------------------------------------------------------
 data Composition es ts solver a where
@@ -231,7 +250,7 @@ instance Solver solver => CTransformer (Composition es ts solver a) where
 newtype CBranchBoundST (solver :: * -> *) a = CBBST (NewBound solver)
 data    BBEvalState solver  = BBP Int (Bound solver)
 
-type Bound    solver  = forall a. (Tree solver a -> Tree solver a)
+newtype Bound    solver  = Bound (forall a. (Tree solver a -> Tree solver a))
 type NewBound solver  = solver (Bound solver)
 
 instance (Solver solver) => CTransformer (CBranchBoundST solver a) where
@@ -239,13 +258,13 @@ instance (Solver solver) => CTransformer (CBranchBoundST solver a) where
   type CTreeState (CBranchBoundST solver a) = Int
   type CForSolver (CBranchBoundST solver a) = solver
   type CForResult (CBranchBoundST solver a) = a
-  initCT _  = (BBP 0 id,0)
-  nextCT tree c es@(BBP nv bound) v eval continue exit
+  initCT _  = (BBP 0 (Bound id),0)
+  nextCT tree c es@(BBP nv (Bound bound)) v eval continue exit
     | nv > v        = eval (bound tree) es nv
     | otherwise     = eval        tree es v
   returnCT (CBBST newBound) (BBP v bound) continue exit =
-    do bound' :: Bound solver <- newBound  
-       continue (BBP (v + 1) bound')
+    do bound' <- newBound
+       continue $ BBP (v + 1) bound' 
 
 --------------------------------------------------------------------------------
 -- RESTARTING
