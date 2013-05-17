@@ -1,15 +1,14 @@
 Name:			monadiccp
-Version:		0.7.0
+Version:		0.7.1
 Description:		Monadic Constraint Programming framework
 License:		BSD3
 License-file:		LICENSE
 Author:			Tom Schrijvers, Pieter Wuille
-Maintainer:		tom.schrijvers@cs.kuleuven.be
+Maintainer:		tom.schrijvers@ugent.be
 Build-Type:		Simple
 Category:		control
 Synopsis:		Constraint Programming
-Homepage:		http://www.cs.kuleuven.be/~toms/MCP/
-Bug-reports:		http://trac.haskell.org/monadiccp/
+Homepage:		http://users.ugent.be/~tschrijv/MCP/
 Cabal-Version:		>=1.6
 Extra-Source-Files: 	examples/*.hs lib/*.cpp lib/*.h
 

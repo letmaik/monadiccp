@@ -8,10 +8,12 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ImpredicativeTypes #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Control.CP.ComposableTransformers (
   solve, 
   NewBound, 
+  Bound,
   CTransformer, 
   CForSolver, 
   CForResult, 
@@ -242,8 +244,8 @@ instance (Solver solver) => CTransformer (CBranchBoundST solver a) where
     | nv > v        = eval (bound tree) es nv
     | otherwise     = eval        tree es v
   returnCT (CBBST newBound) (BBP v bound) continue exit =
-    do bound' <- newBound
-       continue $ BBP (v + 1) bound' 
+    do bound' :: Bound solver <- newBound  
+       continue (BBP (v + 1) bound')
 
 --------------------------------------------------------------------------------
 -- RESTARTING
