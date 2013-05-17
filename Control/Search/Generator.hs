@@ -43,7 +43,7 @@ module Control.Search.Generator
 import Debug.Trace
 
 import Text.PrettyPrint hiding (space)
-import List (sort, nub, sortBy)
+import Data.List (sort, nub, sortBy)
 import Data.List (intercalate)
 import Data.Unique
 import Unsafe.Coerce

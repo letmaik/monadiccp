@@ -25,7 +25,7 @@ module Control.CP.FD.OvertonFD.OvertonFD (
 ) where
 
 import Prelude hiding (lookup)
-import Maybe (fromJust,isJust)
+import Data.Maybe (fromJust,isJust)
 import Control.Monad.State.Lazy
 import Control.Monad.Trans
 import qualified Data.Map as Map

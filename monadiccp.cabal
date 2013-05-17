@@ -1,5 +1,5 @@
 Name:			monadiccp
-Version:		0.7.2
+Version:		0.7.3
 Description:		Monadic Constraint Programming framework
 License:		BSD3
 License-file:		LICENSE
@@ -12,6 +12,7 @@ Homepage:		http://users.ugent.be/~tschrijv/MCP/
 Bug-reports:		http://trac.haskell.org/monadiccp/
 Cabal-Version:		>=1.6
 Extra-Source-Files: 	examples/*.hs lib/*.cpp lib/*.h
+Data-Files:		README.txt
 
 -- examples/Alpha.hs examples/Grocery.hs examples/MagicSquare.hs examples/Olympic.hs examples/Partition.hs examples/Queens.hs examples/Ring.hs examples/StressDomain.hs examples/TryDemo.hs examples/Zebra.hs
 
@@ -24,7 +25,7 @@ Flag Debug
     Default:		False
 
 library
-    Build-Depends:	base >= 2, base < 5, containers, mtl, haskell98, random, pretty, parsec >= 3.0
+    Build-Depends:	base >= 2, base < 5, containers, mtl, random, pretty, parsec >= 3.0
     Exposed-Modules:	Data.Expr.Sugar
                         Control.CP.SearchTree
                         Control.CP.Transformers

@@ -2,7 +2,7 @@
 
 module Control.Search.Combinator.And (andN,(<&>)) where
 
-import Maybe (fromMaybe, catMaybes, fromJust)
+import Data.Maybe (fromMaybe, catMaybes, fromJust)
 
 import Control.Search.Language
 import Control.Search.GeneratorInfo

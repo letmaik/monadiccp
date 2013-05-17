@@ -10,7 +10,7 @@ import Control.Monatron.Zipper hiding (i,r)
 import Control.Monatron.IdT
 import Control.Monatron.MonadInfo
 
-import List (sort, nub, sortBy)
+import Data.List (sort, nub, sortBy)
 import Data.Maybe (fromJust)
 import Data.Map (Map)
 import qualified Data.Map as Map

@@ -21,7 +21,7 @@ module Control.CP.FD.Example (
 ) where
 
 
-import System (getArgs)
+import System.Environment (getArgs)
 import Data.Maybe (fromJust,isJust)
 import Data.Map (Map)
 import qualified Data.Map as Map

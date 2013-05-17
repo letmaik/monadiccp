@@ -13,7 +13,7 @@ module Control.Search.Constraints
   ) where
 
 import Text.PrettyPrint hiding (space)
-import List (sort, nub, sortBy)
+import Data.List (sort, nub, sortBy)
 import Unsafe.Coerce
 
 import Control.Search.Language
