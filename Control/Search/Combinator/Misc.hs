@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE RankNTypes #-}
 
 module Control.Search.Combinator.Misc (dbs, lds, bbmin) where
 
@@ -18,10 +19,10 @@ ldsLoop limit super' = return $ commentEval $ super
                      , evalState_  = ("lds_complete", Bool, const $ return true) : evalState_ super
                      , pushLeftH   = \i -> pushLeft  super (i `onCommit` mkCopy i "lds")
                      , pushRightH  = \i -> pushRight super (i `onCommit` mkUpdate i "lds" (\x -> x - 1)) >>= \stmt -> 
-						return $ IfThenElse 
-							   (tstate (old i) @-> "lds" @>= 0) 
+                                                return $ IfThenElse 
+                                                           (tstate (old i) @-> "lds" @>= 0) 
                                                            stmt
-							   (abort i >>> (estate i @=> "lds_complete" <== false))
+                                                           (abort i >>> (estate i @=> "lds_complete" <== false))
                      , toString = "lds(" ++ show limit ++ "," ++ toString super ++ ")"
                      , complete = \i -> return $ estate i @=> "lds_complete"
                      }
@@ -32,13 +33,13 @@ dbsLoop :: Monad m => Int32 -> MkEval m
 dbsLoop limit super = return $ commentEval $ super
                      { treeState_  = entry ("depth_limit",Int,assign $ IVal limit) : treeState_ super
                      , evalState_  = ("dbs_complete", Bool, const $ return true) : evalState_ super
-		     , pushLeftH   = push pushLeft
+                     , pushLeftH   = push pushLeft
                      , pushRightH  = push pushRight
                      , toString = "dbs(" ++ show limit ++ "," ++ toString super ++ ")"
                      , complete = \i -> return $ estate i @=> "dbs_complete"
                      }
   where push dir = 
-	  \i -> dir super (i `onCommit` mkUpdate i "depth_limit" (\x -> x - 1)) >>= \stmt ->
+          \i -> dir super (i `onCommit` mkUpdate i "depth_limit" (\x -> x - 1)) >>= \stmt ->
                 return $ IfThenElse (tstate (old i) @-> "depth_limit" @>= 0)
                                     stmt
                                     ((estate i @=> "dbs_complete" <== false) >>> abort i)
@@ -49,7 +50,7 @@ bbLoop var super = return $ commentEval $ super
   { treeState_  = entry ("tree_bound_version",Int,assign 0) : treeState_ super
   , evalState_   = ("bound_version",Int,const $ return 0) : ("bound",Int,const $ return $ IVal maxBound) : evalState_ super
   , returnH     = \i -> returnE super (i `onCommit`
-			   let get = VHook (rp 0 (space i) ++ "->iv[VAR_" ++ var ++ "].min()")
+                           let get = VHook (rp 0 (space i) ++ "->iv[VAR_" ++ var ++ "].min()")
                            in  (Assign (estate i @=> "bound") get >>> inc (estate i @=> "bound_version"))) 
   , bodyH = \i -> let set = Post (space i) (VHook (rp 0 (space i) ++ "->iv[VAR_" ++ var ++ "]") $< (estate i @=> "bound"))
                               in  do r <- bodyE super i
