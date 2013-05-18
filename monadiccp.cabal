@@ -1,20 +1,26 @@
 Name:			monadiccp
-Version:		0.7.4
+Version:		0.7.5
 Description:		Monadic Constraint Programming framework
 License:		BSD3
 License-file:		LICENSE
 Author:			Tom Schrijvers, Pieter Wuille
-Maintainer:		tom.schrijvers@ugent.be
+Maintainer:		maik.riechert@arcor.de
 Build-Type:		Simple
 Category:		control
 Synopsis:		Constraint Programming
 Homepage:		http://users.ugent.be/~tschrijv/MCP/
-Bug-reports:		http://trac.haskell.org/monadiccp/
+Bug-reports:		https://github.com/neothemachine/monadiccp/issues
 Cabal-Version:		>=1.6
 Extra-Source-Files: 	examples/*.hs lib/*.cpp lib/*.h
 Data-Files:		README.txt
 
--- examples/Alpha.hs examples/Grocery.hs examples/MagicSquare.hs examples/Olympic.hs examples/Partition.hs examples/Queens.hs examples/Ring.hs examples/StressDomain.hs examples/TryDemo.hs examples/Zebra.hs
+tested-with:     
+                 GHC==7.4.1,
+                 GHC==7.6.2
+
+source-repository head
+  type:      git
+  location:  git://github.com/neothemachine/monadiccp.git
 
 Flag RuntimeGecode
     Description:	Include the RuntimeSolver and SearchSolver for Gecode. Requires a working Gecode 3.1 installation.
