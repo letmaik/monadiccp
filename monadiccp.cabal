@@ -12,7 +12,7 @@ Homepage:		http://users.ugent.be/~tschrijv/MCP/
 Bug-reports:		https://github.com/neothemachine/monadiccp/issues
 Cabal-Version:		>=1.6
 Extra-Source-Files: 	examples/*.hs lib/*.cpp lib/*.h
-Data-Files:		README.txt
+Data-Files:		README.md
 
 tested-with:     
                  GHC==7.4.1,
