@@ -1,5 +1,4 @@
 {-# LANGUAGE Rank2Types #-}
-{-# LANGUAGE CPP #-}
 
 module Control.CP.FD.Example.Example (
   example_main,
@@ -18,19 +17,11 @@ import Control.CP.FD.FD
 import Control.CP.EnumTerm
 import Control.CP.SearchTree hiding (label)
 
-#ifdef RGECODE
-import Control.CP.FD.Gecode.RuntimeSolver
-#endif
-
 example_main :: (forall s. FDSolver s => [String] -> FDTree s [FDExpr s]) -> IO ()
 example_main f = do
   args <- getArgs
   case args of
     ("gecode_compile":r) -> putStr $ generate_gecode $ as_gecode_codegen $ f r
-#ifdef RGECODE
-    ("gecode_run":r) -> print $ solve dfs fs $ as_gecode_runtime $ f r >>= \l -> enumerate l /\ assignments l
-    ("gecode_search":r) -> print $ solve dfs fs $ as_gecode_search $ f r >>= \l -> enumerate l /\ assignments l
-#endif
     ("overton_run":r) -> print $ solve dfs fs $ as_overtonfd $ f r >>= \l -> enumerate l /\ assignments l
     [] -> putStr "Solver type required\n"
     (a:r) -> putStr ("Unsupported solver: " ++ a ++ "\n")

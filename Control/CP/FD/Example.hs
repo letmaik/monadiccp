@@ -1,6 +1,5 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -16,6 +15,10 @@ module Control.CP.FD.Example (
   example_min_main_single,
   example_min_main_single_expr,
   example_min_main_coll_expr,
+  codegenOptionset,
+  runSolve,
+  labeller,
+  postMinimize,
   ExampleModel, ExampleMinModel, 
   module Control.CP.FD.Interface,
 ) where
@@ -43,21 +46,6 @@ import Control.CP.ComposableTransformers
 import Control.CP.FD.Solvers
 
 import Control.Monad.Cont
-
-#ifdef RGECODE
-import Control.CP.FD.Gecode.Runtime
-import Control.CP.FD.Gecode.RuntimeSearch
-
-setSearchMinimize :: Tree (FDInstance (GecodeWrappedSolver SearchGecodeSolver)) ()
-setSearchMinimize = do
-  term <- label $ 
-    do
-      x <- getMinimizeTerm
-      return $ return x
-  label $ do
-    liftFD $ liftGC $ Control.CP.FD.Gecode.RuntimeSearch.setOptions (\o -> o { minimizeVar = term })
-    return $ return ()
-#endif
 
 type ExampleModel t =    (forall s m. (Show (FDIntTerm s), FDSolver s, MonadTree m, TreeSolver m ~ (FDInstance s)) => t -> m (ModelCol))
 type ExampleMinModel t = (forall s m. (Show (FDIntTerm s), FDSolver s, MonadTree m, TreeSolver m ~ (FDInstance s)) => t -> m (ModelInt,ModelCol))
@@ -96,11 +84,6 @@ example_main f fx fcx typ = do
     ("gen_gecode_compile":r) -> putStr $ generateGecode ((\x -> codegenOptionset (\c -> c { noGenSearch=True }) >> fx x) :: ModelInt -> Tree (FDInstance (GecodeWrappedSolver CodegenGecodeSolver)) ModelCol)
     ("gen_gecode_compile_notrail":r) -> putStr $ generateGecode ((\x -> codegenOptionset (\c -> c { noTrailing=True, noGenSearch=True }) >> fx x) :: ModelInt -> Tree (FDInstance (GecodeWrappedSolver CodegenGecodeSolver)) ModelCol)
     ("gen_gecode_compile_gensrch":r) -> putStr $ generateGecode ((\x -> codegenOptionset (\c -> c { noGenSearch=False }) >> fx x) :: ModelInt -> Tree (FDInstance (GecodeWrappedSolver CodegenGecodeSolver)) ModelCol)
-#ifdef RGECODE
-    ("gecode_run":r) -> print $ runSolve typ $ ((f r) :: Tree (FDInstance (GecodeWrappedSolver RuntimeGecodeSolver)) ModelCol) >>= labeller
-    ("gecode_run_cont":r) -> print $ runSolve typ $ ((runContT (f r >>= labeller) Return) :: Tree (FDInstance (GecodeWrappedSolver RuntimeGecodeSolver)) [Integer])
-    ("gecode_search":r) -> print $ runSolve typ $ ((f r >>= (\x -> setSearchMinimize >> return x)) :: Tree (FDInstance (GecodeWrappedSolver SearchGecodeSolver)) ModelCol) >>= labelCol
-#endif
     ("overton_run":r) -> print $ runSolve typ $ ((f r) :: Tree (FDInstance OvertonFD) ModelCol) >>= labeller
     [] -> putStr "Solver type required: one of gecode_compile, gen_gecode_compile, gecode_run, gecode_run_cont, overton_run\n"
     (a:r) -> putStr ("Unsupported solver: " ++ a ++ "\n")

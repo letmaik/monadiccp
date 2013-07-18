@@ -3,7 +3,10 @@
 
 import Control.CP.FD.Example
 
+aroundY :: ModelCol
 aroundY = list [-1,-1,0,1,1,1,0,-1]
+
+aroundX :: ModelCol
 aroundX = list [0,1,1,1,0,-1,-1,-1]
 
 model :: ExampleModel ()
@@ -29,6 +32,7 @@ main = example_sat_main_void model
 
 u = (-1)
 
+board :: ModelCol
 board = list $
   [
     10,

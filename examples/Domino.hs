@@ -35,6 +35,7 @@ model num = do
 
 main = example_sat_main_single_expr model
 
+specs :: ModelCol
 specs = list 
   [
       8,7,
