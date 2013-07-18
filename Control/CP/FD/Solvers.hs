@@ -1,5 +1,3 @@
-{-# LANGUAGE CPP #-}
-
 module Control.CP.FD.Solvers where
 
 import qualified Control.CP.PriorityQueue as PriorityQueue
@@ -11,10 +9,6 @@ import Control.CP.FD.FD
 -- import Control.CP.FD.OvertonFD.Sugar
 -- import Control.CP.FD.OvertonFD.OvertonFD
 -- import Control.CP.FD.Gecode.CodegenSolver
-
-#ifdef RGECODE
--- import Control.CP.FD.Gecode.RuntimeSolver
-#endif
 
 --------------------------------------------------------------------------------
 -- FORCE SOLVERS
@@ -29,13 +23,6 @@ import Control.CP.FD.FD
 -- as_gen_gecode_codegen :: (FDExpr CodegenSolver -> Tree (FDWrapper CodegenSolver) a) -> (FDExpr CodegenSolver -> Tree CodegenSolver a)
 -- as_gen_gecode_codegen f = (\x -> unwrap $ f x)
 -- 
--- #ifdef RGECODE
--- as_gecode_runtime :: Tree (FDWrapper RuntimeSolver) a -> Tree RuntimeSolver a
--- as_gecode_runtime = unwrap
--- 
--- as_gecode_search :: Tree (FDWrapper SearchSolver) a -> Tree (FDWrapper SearchSolver) a
--- as_gecode_search = id
--- #endif
 
 ------------------------------------------------------------------------------
 -- SEARCH STRATEGIES
