@@ -15,6 +15,10 @@ module Control.CP.FD.Example (
   example_min_main_single,
   example_min_main_single_expr,
   example_min_main_coll_expr,
+  codegenOptionset,
+  runSolve,
+  labeller,
+  postMinimize,
   ExampleModel, ExampleMinModel, 
   module Control.CP.FD.Interface,
 ) where

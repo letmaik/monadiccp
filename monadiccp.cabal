@@ -28,6 +28,8 @@ Flag Debug
 library
     Build-Depends:	base >= 2, base < 5, containers, mtl, random, pretty, parsec >= 3.0
     Exposed-Modules:	Data.Expr.Sugar
+                        Data.Expr.Data
+                        Data.Linear
                         Control.CP.SearchTree
                         Control.CP.Transformers
                         Control.CP.ComposableTransformers
@@ -44,16 +46,14 @@ library
                         Control.CP.FD.Example
                         Control.CP.FD.FD
                         Control.CP.FD.Gecode.Common
-    Other-Modules:	Data.Expr.Data
-                        Data.Expr.Util
-                        Data.Linear
+                        Control.CP.Debug
+                        Control.Mixin.Mixin
+    Other-Modules:	Data.Expr.Util
                         Control.CP.FD.OvertonFD.Domain
                         Control.CP.FD.SimpleFD
                         Control.CP.FD.Graph
                         Control.CP.FD.Decompose
                         Control.CP.FD.SearchSpec.Data
-                        Control.CP.Debug
-                        Control.Mixin.Mixin
                         Language.CPP.Syntax.AST
                         Language.CPP.Pretty
                         Control.Search.Language
