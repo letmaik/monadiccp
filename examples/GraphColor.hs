@@ -40,6 +40,7 @@ main = example_min_main_void model
   5,6,2,4,6,8,10,12,0,1,1,2,2,3,3,4,4,0,2,4
 -}
 
+board :: ModelCol
 board = list $
  [
   200,367,
