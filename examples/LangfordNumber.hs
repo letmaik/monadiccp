@@ -5,7 +5,8 @@ import Control.CP.FD.Example
 
 model :: ExampleModel ModelCol
 model c = do
-  let n = c!0
+  let c = col
+      n = c!0
       k = c!1
   exists $ \y -> do
     size y @= k*n
@@ -25,3 +26,5 @@ model c = do
 
 main = example_sat_main_coll_expr model
 
+col :: ModelCol
+col = list $ [4,2]

@@ -1,3 +1,6 @@
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE FlexibleContexts #-}
+
 {-
 %   File   : olympic.pl
 %   Author : Neng-Fa ZHOU
@@ -10,7 +13,7 @@
 
                   X4   X5   X6
 
-                     X2   X1             
+                     X2   X3             
 
                         X1
 
@@ -27,25 +30,22 @@
 -}
 
 
-import Control.CP.FD.Example.Example
-import Control.CP.FD.FD
-import Control.CP.FD.Expr
-import Control.CP.SearchTree
+import Control.CP.FD.Example
 
-main = example_main_void model
+main = example_sat_main_void model
 
-model :: FDSolver solver => Tree (FDWrapper solver) [Expr (FDTerm solver)]
-model = 
-  exist 10 $ \list@[x1,x2,x3,x4,x5,x6,x7,x8,x9,x10] 
-		    -> list `allin` (1,10) /\ 
-                       allDiff list        /\ 
-		       x1 @= 3             /\ 
-    		       minus x2 x3 x1 	   /\
-                       minus x4 x5 x2 	   /\
-                       minus x5 x6 x3 	   /\
-                       minus x7 x8 x4 	   /\
-    		       minus x8 x9 x5 	   /\
-    		       minus x9 x10 x6     /\
-		       return list
+model :: ExampleModel ()
+model _ = exists $ \col -> do
+  [x1,x2,x3,x4,x5,x6,x7,x8,x9,x10] <- colList col 10
+  col `allin` (cte 1, cte 10) 
+  allDiff col
+  x1 @= 3
+  minus x2 x3 x1
+  minus x4 x5 x2
+  minus x5 x6 x3
+  minus x7 x8 x4
+  minus x8 x9 x5
+  minus x9 x10 x6
+  return col
 
 minus x1 x2 x3 = (abs (x1-x2)) @= x3

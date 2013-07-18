@@ -1,5 +1,5 @@
 Name:			monadiccp
-Version:		0.7.5
+Version:		0.7.6
 Description:		Monadic Constraint Programming framework
 License:		BSD3
 License-file:		LICENSE
@@ -11,20 +11,15 @@ Synopsis:		Constraint Programming
 Homepage:		http://users.ugent.be/~tschrijv/MCP/
 Bug-reports:		https://github.com/neothemachine/monadiccp/issues
 Cabal-Version:		>=1.6
-Extra-Source-Files: 	examples/*.hs lib/*.cpp lib/*.h
+Extra-Source-Files: 	examples/*.hs
 Data-Files:		README.md
 
 tested-with:     
-                 GHC==7.4.1,
-                 GHC==7.6.2
+                 GHC==7.6.3
 
 source-repository head
   type:      git
   location:  git://github.com/neothemachine/monadiccp.git
-
-Flag RuntimeGecode
-    Description:	Include the RuntimeSolver and SearchSolver for Gecode. Requires a working Gecode 3.1 installation.
-    Default:		False
 
 Flag Debug
     Description:	Generate debug output
@@ -33,6 +28,8 @@ Flag Debug
 library
     Build-Depends:	base >= 2, base < 5, containers, mtl, random, pretty, parsec >= 3.0
     Exposed-Modules:	Data.Expr.Sugar
+                        Data.Expr.Data
+                        Data.Linear
                         Control.CP.SearchTree
                         Control.CP.Transformers
                         Control.CP.ComposableTransformers
@@ -49,16 +46,14 @@ library
                         Control.CP.FD.Example
                         Control.CP.FD.FD
                         Control.CP.FD.Gecode.Common
-    Other-Modules:	Data.Expr.Data
-                        Data.Expr.Util
-                        Data.Linear
+                        Control.CP.Debug
+                        Control.Mixin.Mixin
+    Other-Modules:	Data.Expr.Util
                         Control.CP.FD.OvertonFD.Domain
                         Control.CP.FD.SimpleFD
                         Control.CP.FD.Graph
                         Control.CP.FD.Decompose
                         Control.CP.FD.SearchSpec.Data
-                        Control.CP.Debug
-                        Control.Mixin.Mixin
                         Language.CPP.Syntax.AST
                         Language.CPP.Pretty
                         Control.Search.Language
@@ -98,17 +93,8 @@ library
                         Control.Monatron.Monad
                         Control.Monatron.ZipperExamples
     GHC-Prof-Options:	-auto-all -caf-all
-    Include-Dirs:	lib
     if flag(Debug)
         CPP-Options:	-DDEBUG
         CC-Options:	"-ggdb3" "-Wall"
     else
         CC-Options:	"-g0" "-DNDEBUG" "-Wall"
-    if flag(runtimegecode)
-        C-Sources:		lib/gecodeglue.cpp
-        Extra-Libraries:	gecodesupport gecodeset gecodeint gecodekernel gecodesearch
-        Exposed-Modules:	Control.CP.FD.Gecode.Runtime
-                                Control.CP.FD.Gecode.RuntimeSearch
-                                Control.CP.FD.Gecode.Interface
-        CPP-Options:		-DRGECODE
-        Frameworks:		gecode

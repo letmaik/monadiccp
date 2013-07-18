@@ -529,8 +529,8 @@ forceDecompCol str info =
         Just (GCTVar var) -> return var
         x -> error $ "unable to decompose col ("++(show x)++"): "++str++"?"
 
-newtype (GecodeSolver s, Constraint s ~ GecodeConstraint s) => GecodeWrappedSolver s a = GecodeWrappedSolver (s a)
-newtype (GecodeSolver s, Constraint s ~ GecodeConstraint s) => GecodeWrappedLabel s = GecodeWrappedLabel (Label s)
+newtype GecodeWrappedSolver s a = GecodeWrappedSolver (s a)
+newtype GecodeWrappedLabel s = GecodeWrappedLabel (Label s)
 
 instance (GecodeSolver s, Constraint s ~ GecodeConstraint s) => Monad (GecodeWrappedSolver s) where
   {-# INLINE (>>=) #-}

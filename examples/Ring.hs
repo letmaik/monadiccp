@@ -1,30 +1,19 @@
-import Control.CP.FD.Example.Example
-import Control.CP.FD.FD
-import Control.CP.FD.Expr
-import Control.CP.SearchTree
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE FlexibleContexts #-}
 
-import List (tails)
-import Data.Map (toList)
+import Control.CP.FD.Example
 
-main = example_main_single model
+main = example_sat_main_single_expr model
 
--- generate a disjunction producing a list of variables, consisting of alr
--- prefixed by up to maxlen new variables
-varexist :: FDSolver solver => Int -> [FDExpr solver] -> Tree (FDWrapper solver) [FDExpr solver]
-varexist maxlen alr = 
-  if maxlen==0
-  then return alr
-  else return alr \/ (exists $ \x -> varexist (maxlen-1) (x:alr))
+model :: ExampleModel ModelInt
+model n = exists $ \col -> do
+  size col @= n
+  loopall (0,(n-1)) $ \i -> do
+    let v0 = col ! i
+        v1 = col ! ((i+1) `mod` n)
+        v2 = col ! ((i+2) `mod` n)
+    2 * v1 @= 2 * v2 - v0
+    v0 @: (cte (-10), cte 10)
+  return col
 
--- constr list i = (if (i < (length list)-2) then v2 @= v0 * v1 - i else true) /\ v0 @: (-10,10)
-constr list i = 2*v1 @= 2*v2 - v0 /\ 
-                v0 @: (-10,10)
-   where v0 = list !! i
-         v1 = list !! ((i+1) `mod` (length list))
-         v2 = list !! ((i+2) `mod` (length list))
 
-model :: FDSolver solver => Int -> Tree (FDWrapper solver) [FDExpr solver]
-model n = exists $ \x -> 
-          do list <- varexist n [x]
-             conj $ [ constr list i | i <- [0..(length list)-1] ]
-             return list
