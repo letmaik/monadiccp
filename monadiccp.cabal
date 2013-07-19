@@ -29,6 +29,7 @@ library
     Build-Depends:	base >= 2, base < 5, containers, mtl, random, pretty, parsec >= 3.0
     Exposed-Modules:	Data.Expr.Sugar
                         Data.Expr.Data
+                        Data.Expr.Util
                         Data.Linear
                         Control.CP.SearchTree
                         Control.CP.Transformers
@@ -76,8 +77,7 @@ library
                         Control.Mixin.Mixin
                         Language.CPP.Syntax.AST
                         Language.CPP.Pretty
-    Other-Modules:	Data.Expr.Util
-                        Control.Monatron.Monatron
+    Other-Modules:	    Control.Monatron.Monatron
                         Control.Monatron.MonadInfo
                         Control.Monatron.AutoLift
                         Control.Monatron.Operations
