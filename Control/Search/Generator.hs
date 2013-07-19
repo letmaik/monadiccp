@@ -55,7 +55,7 @@ import Control.Search.Memo
 import Control.Search.MemoReader
 #endif
 
-import Control.Monatron.Monatron hiding (Abort, L, state, cont, (<>))
+import Control.Monatron.Monatron hiding (Abort, L, state, cont)
 import Control.Monatron.Zipper hiding (i,r)
 import Control.Monatron.MonadInfo
 import Control.Monatron.IdT
