@@ -126,28 +126,28 @@ data Eval m = Eval
                  { structs    :: ([Struct],[Struct])                        -- auxiliary type declarations
                  , treeState_ :: [(String,Type, Info -> m Statement)]        -- tree state fields (name, type, init)
                  , evalState_  :: [(String,Type, Info -> m Value)]
-		 , nextSameH   :: Info -> m Statement
-		 , nextDiffH   :: Info -> m Statement
+         , nextSameH   :: Info -> m Statement
+         , nextDiffH   :: Info -> m Statement
                  , pushLeftH   :: Info -> m Statement
                  , pushRightH  :: Info -> m Statement
-		 , bodyH      :: Info -> m Statement
+         , bodyH      :: Info -> m Statement
                  , initH      :: Info -> m Statement
                  , addH       :: Info -> m Statement
-		 , returnH    :: Info -> m Statement
-	         , failH      :: Info -> m Statement
+         , returnH    :: Info -> m Statement
+             , failH      :: Info -> m Statement
                  , tryH       :: Info -> m Statement
                  , tryLH      :: Info -> m Statement
                  , startTryH  :: Info -> m Statement
                  , intArraysE :: [String]
                  , boolArraysE :: [String]
                  , intVarsE   :: [String]
- 		 , -- Free heap allocated memory for search heuristic associated to this node
-		   -- because it is being abandoned.
-		   --
-		   -- BE CAREFUL: deallocate memory only once in case of multiple references.
-		   --
-		   -- Example use case: untilLoop
-		   deleteH    :: Info -> m Statement
+          , -- Free heap allocated memory for search heuristic associated to this node
+           -- because it is being abandoned.
+           --
+           -- BE CAREFUL: deallocate memory only once in case of multiple references.
+           --
+           -- Example use case: untilLoop
+           deleteH    :: Info -> m Statement
                  , toString   :: String
                  , canBranch  :: m Bool
                  , complete   :: Info -> m Value
@@ -675,7 +675,7 @@ memoize =
 #endif
 
 {-# RULES
-  	"L"                          L = unsafeCoerce
+      "L"                          L = unsafeCoerce
   #-}
 {-# RULES
         "runL"                       runL = unsafeCoerce
@@ -697,13 +697,13 @@ s1 <@> s2 =
     Search { mkeval = evals1, runsearch = runs1 } ->
       case s2 of
         Search { mkeval = evals2, runsearch = runs2 } ->
-	  Search {mkeval =
-	          \super -> do { s2' <- evals2 $ mapE (L . L . mmap runL . runL)  super
-	                       ; s1' <- evals1 (mapE runL s2')
-	                       ; return $ mapE (L . mmap L . runL) s1'
-	                       }
-	         , runsearch  = runs2 . runs1 . runL
-	         }
+         Search {mkeval =
+              \super -> do { s2' <- evals2 $ mapE (L . L . mmap runL . runL)  super
+                           ; s1' <- evals1 (mapE runL s2')
+                           ; return $ mapE (L . mmap L . runL) s1'
+                           }
+             , runsearch  = runs2 . runs1 . runL
+             }
 
 
 data SearchCombiner = forall t1 t2. (FMonadT t1, FMonadT t2, MonadInfoT t1, MonadInfoT t2) =>

@@ -15,7 +15,6 @@ module Control.CP.FD.Example (
   example_min_main_single,
   example_min_main_single_expr,
   example_min_main_coll_expr,
-  codegenOptionset,
   runSolve,
   labeller,
   postMinimize,
@@ -30,8 +29,6 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.List (init,last)
 
-import Control.CP.FD.Gecode.CodegenSolver
-import Control.CP.FD.Gecode.Common
 import Control.CP.FD.OvertonFD.OvertonFD
 import Control.CP.FD.OvertonFD.Sugar
 import Control.CP.FD.FD
@@ -58,9 +55,6 @@ postMinimize m = \x -> do
     setMinimizeVar min
     return $ return res
 
-codegenOptionset :: (CodegenGecodeOptions -> CodegenGecodeOptions) -> Tree (FDInstance (GecodeWrappedSolver CodegenGecodeSolver)) ()
-codegenOptionset f = label ((liftFD $ liftGC $ Control.CP.FD.Gecode.CodegenSolver.setOptions f) >> return true)
-
 runSolveSAT x = solve dfs fs x
 runSolveMIN x = solve dfs (bb boundMinimize) x
 
@@ -80,12 +74,8 @@ example_main :: ExampleModel [String] -> ExampleModel ModelInt -> ExampleModel M
 example_main f fx fcx typ = do
   args <- getArgs
   case args of
-    ("gecode_compile":r) -> putStr $ generateGecode ((f r) :: Tree (FDInstance (GecodeWrappedSolver CodegenGecodeSolver)) ModelCol)
-    ("gen_gecode_compile":r) -> putStr $ generateGecode ((\x -> codegenOptionset (\c -> c { noGenSearch=True }) >> fx x) :: ModelInt -> Tree (FDInstance (GecodeWrappedSolver CodegenGecodeSolver)) ModelCol)
-    ("gen_gecode_compile_notrail":r) -> putStr $ generateGecode ((\x -> codegenOptionset (\c -> c { noTrailing=True, noGenSearch=True }) >> fx x) :: ModelInt -> Tree (FDInstance (GecodeWrappedSolver CodegenGecodeSolver)) ModelCol)
-    ("gen_gecode_compile_gensrch":r) -> putStr $ generateGecode ((\x -> codegenOptionset (\c -> c { noGenSearch=False }) >> fx x) :: ModelInt -> Tree (FDInstance (GecodeWrappedSolver CodegenGecodeSolver)) ModelCol)
     ("overton_run":r) -> print $ runSolve typ $ ((f r) :: Tree (FDInstance OvertonFD) ModelCol) >>= labeller
-    [] -> putStr "Solver type required: one of gecode_compile, gen_gecode_compile, gecode_run, gecode_run_cont, overton_run\n"
+    [] -> putStr "Solver type required: must be overton_run\n"
     (a:r) -> putStr ("Unsupported solver: " ++ a ++ "\n")
 
 example_min_main :: ExampleMinModel [String] -> ExampleMinModel ModelInt -> ExampleMinModel ModelCol -> IO ()

@@ -1,7 +1,7 @@
 module Control.CP.SearchSpec.Language  where 
 
 import Text.PrettyPrint
-import Data.Monoid
+import Data.Monoid hiding ((<>))
 import Data.Int
 
 spacetype = "MCPProgram"
@@ -46,12 +46,12 @@ data Value = IVal Int32
            | Field' Value String
            | PField Value String
            | Lt Value Value
-	   | Gq Value Value
-	   | Gt Value Value
-	   | Eq Value Value
-	   | BaseContinue
-	   | And Value Value
-	   | Or  Value Value
+       | Gq Value Value
+       | Gt Value Value
+       | Eq Value Value
+       | BaseContinue
+       | And Value Value
+       | Or  Value Value
            | Not Value
            | VHook String
            | Max Value Value
@@ -64,10 +64,10 @@ data Value = IVal Int32
            | WDegree Value
            | UbRegret Value
            | LbRegret Value
-	   | Median Value
+       | Median Value
            | Random 
-	   | Null
-	   | New Struct
+       | Null
+       | New Struct
            | Base
            | Cond Value Value Value
            | Assigned Value
@@ -226,14 +226,14 @@ data Statement = IfThenElse Value Statement Statement
                | Update Value Value
                | Seq Statement Statement
                | Assign Value Value
-	       | Abort
-	       | Print Value [String]
+           | Abort
+           | Print Value [String]
                | SHook String
                | Post Value Constraint
                | Fold String Value Value Value (Value -> Value) (Value -> Value -> Value)
                | IFold String Value Value Value (Value -> Value) (Value -> Value -> Value)
-	       | MFold String [(Value, Value->Value)] ([Value] -> [Value] -> Value)
-	       | Delete Value
+           | MFold String [(Value, Value->Value)] ([Value] -> [Value] -> Value)
+           | Delete Value
 
 dec var = Update var (var - 1)
 inc var = Update var (var + 1)

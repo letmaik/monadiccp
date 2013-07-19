@@ -19,7 +19,7 @@ tested-with:
 
 source-repository head
   type:      git
-  location:  git://github.com/neothemachine/monadiccp.git
+  location:  https://github.com/neothemachine/monadiccp.git
 
 Flag Debug
     Description:	Generate debug output
@@ -41,21 +41,10 @@ library
                         Control.CP.FD.OvertonFD.Sugar
                         Control.CP.EnumTerm
                         Control.CP.FD.Solvers
-                        Control.CP.FD.Gecode.CodegenSolver
                         Control.CP.FD.Model
                         Control.CP.FD.Example
                         Control.CP.FD.FD
-                        Control.CP.FD.Gecode.Common
                         Control.CP.Debug
-                        Control.Mixin.Mixin
-    Other-Modules:	Data.Expr.Util
-                        Control.CP.FD.OvertonFD.Domain
-                        Control.CP.FD.SimpleFD
-                        Control.CP.FD.Graph
-                        Control.CP.FD.Decompose
-                        Control.CP.FD.SearchSpec.Data
-                        Language.CPP.Syntax.AST
-                        Language.CPP.Pretty
                         Control.Search.Language
                         Control.Search.Stat
                         Control.Search.Generator
@@ -79,6 +68,15 @@ library
                         Control.Search.Constraints
                         Control.Search.MemoReader
                         Control.Search.SStateT
+                        Control.Mixin.Mixin
+    Other-Modules:	Data.Expr.Util
+                        Control.CP.FD.OvertonFD.Domain
+                        Control.CP.FD.SimpleFD
+                        Control.CP.FD.Graph
+                        Control.CP.FD.Decompose
+                        Control.CP.FD.SearchSpec.Data
+                        Language.CPP.Syntax.AST
+                        Language.CPP.Pretty
                         Control.Monatron.Monatron
                         Control.Monatron.MonadInfo
                         Control.Monatron.AutoLift

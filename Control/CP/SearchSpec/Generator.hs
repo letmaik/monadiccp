@@ -64,7 +64,7 @@ module Control.CP.SearchSpec.Generator
 import Prelude hiding (lex, until, init, repeat)
 import Control.CP.SearchSpec.Language
 import Text.PrettyPrint hiding (space)
-import List (sort, nub)
+import Data.List (sort, nub)
 import Data.Int
 
 {- TODO:
@@ -87,10 +87,10 @@ data Eval m = Eval
                  , evalState  :: [(String,Type,Value)]
                  , pushLeft   :: Info -> m Statement
                  , pushRight  :: Info -> m Statement
-		 , bodyE      :: Info -> m Statement
+         , bodyE      :: Info -> m Statement
                  , addE       :: Info -> m Statement
-		 , returnE    :: Info -> m Statement
-	         , failE      :: Info -> m Statement
+         , returnE    :: Info -> m Statement
+             , failE      :: Info -> m Statement
                  , continue   :: EvalState -> m Value
                  , tryE       :: Info -> m Statement
                  , tryE_      :: Info -> m Statement
@@ -131,8 +131,8 @@ mapE f e =
 data Info = Info { baseTstate :: TreeState
                  , path       :: TreeState -> TreeState
                  , abort      :: Statement
-	         , commit     :: Statement
-	         , old        :: Info
+             , commit     :: Statement
+             , old        :: Info
                  , clone      :: Info -> Statement
                  , field      :: String -> Value
                  }
@@ -175,7 +175,7 @@ newinfo i =
        Info { baseTstate = Var "nstate"
             , path       = id
             , abort      = Skip
-	    , commit     = Skip
+        , commit     = Skip
             , old        = resetPath i
             , clone      = \j -> space j <== Clone (space i)
             , field      = \f -> error ("unknown field `" ++ f ++ "'")
@@ -185,7 +185,7 @@ newinfo i =
 -- LABELING
 --------------------------------------------------------------------------------
 data Label m = Label 
-	           { treeStateL   :: [(String,Type, Value -> Statement)]
+               { treeStateL   :: [(String,Type, Value -> Statement)]
                    , leftChild_L  :: [Info -> Statement]
                    , rightChild_L :: [Info -> Statement]
                    , addL         :: Info -> m Statement
@@ -221,7 +221,7 @@ v1Label var1 selVal rel e =
 
 vLabel vars selVar selVal rel e = 
             Label { treeStateL  = [("pos", Int,  assign 0)
-				  ,("val", Int,  assign 0)
+                  ,("val", Int,  assign 0)
                                   ,("eq",  Bool, assign true)]
                   , leftChild_L  = 
                                   [ \i -> mkUpdate i "eq" (const true)
@@ -265,14 +265,14 @@ ifoldVarSel metric (better, zero) i vars notfound found =
 {-
 lexLabel info selVal rel e = 
             Label { treeStateL  = [("pos", Int, 0)
-				  ,("val", Int, 0)
+                  ,("val", Int, 0)
                                   ,("eq",  Bool, undefined)]
                   , leftChild_L  = [("eq", const $ true)
                                   ,("val", \env -> env "val")
                                   ,("pos",\env -> env "pos")]
                   , rightChild_L = [("eq", const $ false)
                                   ,("val", \env -> env "val")
-			          ,("pos",\env -> env "pos")]
+                      ,("pos",\env -> env "pos")]
                   , addL        = \state -> let space = Field state "space"
                                                 var   = CVar space (Field state "pos")
                                                 val   = Field state "val"
@@ -316,30 +316,30 @@ randomD        = \v -> (Random `Mod` (domsizeV v)) + minD v
 --------------------------------------------------------------------------------
 
 baseLoop label this = return $
-	    Eval { structs      = ([],[])
+        Eval { structs      = ([],[])
                  ,  treeState_   = map (\(x,y,z) -> entry x y z) $ treeStateL label  
                  ,  evalState   = []
-		 ,  pushLeft    = \i -> return $ commit i >>> seqs [f i | f <- leftChild_L label]  >>> Push new_tstate
-		 ,  pushRight   = \i -> return $ commit i >>> seqs [f i | f <- rightChild_L label] >>> Push new_tstate
-		 ,  bodyE       = addE this . resetPath
+         ,  pushLeft    = \i -> return $ commit i >>> seqs [f i | f <- leftChild_L label]  >>> Push new_tstate
+         ,  pushRight   = \i -> return $ commit i >>> seqs [f i | f <- rightChild_L label] >>> Push new_tstate
+         ,  bodyE       = addE this . resetPath
                  ,  addE        = \i -> tryE this (resetPath i)   >>= \try ->
-			 	        addL label i              >>= \a   -> 
+                         addL label i              >>= \a   -> 
                                         failE this (resetPath i)  >>= \fail ->
                                         return $
                                                    (a 
-						   >>> (Var "status" <== VHook (rp 0 (space i) ++ "->status()"))
-						   >>> IfThenElse (Var "status" @== VHook "SS_FAILED")
-                                	                 (   fail
-							 >>> Delete (space i))
-        						try) 
-	         ,  failE      = const $ return Skip
+                           >>> (Var "status" <== VHook (rp 0 (space i) ++ "->status()"))
+                           >>> IfThenElse (Var "status" @== VHook "SS_FAILED")
+                                                     (   fail
+                             >>> Delete (space i))
+                                try) 
+             ,  failE      = const $ return Skip
                  ,  returnE    = \i -> return $ commit i
                  ,  continue   = \_ -> return true
                  ,  tryE       = tryL label
                  ,  tryE_      = \i -> 
                                        pushRightTop this (newinfo i)            >>= \p2 -> 
                                        pushLeftTop this  (newinfo i)            >>= \p4 ->
-				       return (SHook "TreeState nstate;"
+                       return (SHook "TreeState nstate;"
                                        >>> p2
                                        >>> p4)
                  , intArraysE  = intArraysL label
@@ -351,11 +351,11 @@ baseLoop label this = return $
 dummyLoop super = Eval { structs    = structs super
                        , treeState_  = treeState_ super
                        , evalState  = evalState super
-		       , pushLeft   = pushLeft super
-		       , pushRight  = pushRight super
+               , pushLeft   = pushLeft super
+               , pushRight  = pushRight super
                        , bodyE      = bodyE super
                        , addE       = addE super
-	 	       , failE      = failE super
+                , failE      = failE super
                        , returnE    = returnE super
                        , continue   = continue super
                        , tryE       = tryE super
@@ -367,11 +367,11 @@ dummyLoop super = Eval { structs    = structs super
 failLoop super = Eval { structs    = ([],[])
                        , treeState_ = []
                        , evalState  = []
-		       , pushLeft   = \_ -> return Skip
-		       , pushRight  = \_ -> return Skip
+               , pushLeft   = \_ -> return Skip
+               , pushRight  = \_ -> return Skip
                        , bodyE      = \i -> return $ abort i
                        , addE       = \_ -> return Skip
-	 	       , failE      = \_ -> return Skip
+                , failE      = \_ -> return Skip
                        , returnE    = \_ -> return Skip
                        , continue   = \_ -> return true
                        , tryE       = \i -> return $ abort i
@@ -395,7 +395,7 @@ seqLoop uid lsuper rsuper =
   Eval { structs     = structs lsuper @++@ structs rsuper @++@ mystructs 
        , treeState_   = [entry "is_fst" Bool  (assign true)
                        , ("seq_union",Union [(SType s3,"fst"),(SType s4,"snd")], 
-				\i -> 
+                \i -> 
                                    let j = i `withPath` in1
                                    in  seqs [init j | (_,init) <- fs3]
                                        >>> initSubEvalState j s1 fs1
@@ -405,17 +405,17 @@ seqLoop uid lsuper rsuper =
        , pushRight   = push pushRight
        , bodyE       = \i ->
                          let f z j = do stmt <- bodyE z (j `onAbort` dec_ref j)
-		                        cond <- continue z (estate j)
+                                cond <- continue z (estate j)
                                         return $ IfThenElse (cont j)
-				  		    (IfThenElse cond
-						                stmt
-							        (   (cont j <== false)
+                              (IfThenElse cond
+                                        stmt
+                                    (   (cont j <== false)
                                                                 >>> dec_ref j
                                                                 >>> abort j)
                                                     )
-						    (   dec_ref j
-						    >>> abort j)
-			 in do s1 <- local (const FirstS)  $ inSeq f i
+                            (   dec_ref j
+                            >>> abort j)
+             in do s1 <- local (const FirstS)  $ inSeq f i
                                s2 <- local (const SecondS) $ inSeq f i
                                return $ IfThenElse (is_fst i) s1 s2
        , addE        = inSeq $ addE
@@ -424,9 +424,9 @@ seqLoop uid lsuper rsuper =
                                  j2  = i `withPath` in2 `onCommit` dec_ref j2
                                  j2b = resetCommit j2
                              in  seqSwitch (do action <- local (const SecondS) $
-				 	                   do stmt1 <- initTreeState_ j2b rsuper 
+                                        do stmt1 <- initTreeState_ j2b rsuper 
                                                               stmt2 <- tryE rsuper j2b
-					                      return (dec_ref j1
+                                          return (dec_ref j1
                                                                      >>> (is_fst i <== false) 
                                                                      >>> initSubEvalState j2b s2 fs2
                                                                      >>> stmt1 >>> stmt2)
@@ -458,9 +458,9 @@ seqLoop uid lsuper rsuper =
                                                                  >>> inc (ref_count j)
                                                                 ))) i
         initSubEvalState = \j s fs ->     (estate j <== New s)  
-				      >>> (ref_count j <== 1)
-			              >>> (cont j <== true)
-  				      >>> seqs [estate j @=> f <== init | (f,init) <- fs]	
+                      >>> (ref_count j <== 1)
+                          >>> (cont j <== true)
+                        >>> seqs [estate j @=> f <== init | (f,init) <- fs]    
 
 in1       = \state -> state @-> "seq_union" @-> "fst"
 in2       = \state -> state @-> "seq_union" @-> "snd"
@@ -473,11 +473,11 @@ orLoop uid lsuper rsuper =
   Eval { structs     = structs lsuper @++@ structs rsuper @++@ mystructs 
        , treeState_   = [entry "is_fst" Bool  (assign true)
                        , ("seq_union",Union [(SType s3,"fst"),(SType s4,"snd")], 
-				\i -> 
+                \i -> 
                                    let j = i `withPath` in1
                                    in (estate j <== New s1)
-				       >>> (ref_count j <== 1)
-				       >>> (cont j <== true)
+                       >>> (ref_count j <== 1)
+                       >>> (cont j <== true)
                                        >>> (parent j <== baseTstate j)
                                        >>> clone i (cloneBase j)
                                        >>> seqs [init (j `withClone` (\k -> inc $ ref_count k)) | (f,init) <- fs3]
@@ -491,20 +491,20 @@ orLoop uid lsuper rsuper =
                                let j = i `withPath` y
                                in   do cond  <- continue z (estate j)
                                        deref <- dec_ref i
-				       stmt  <- bodyE z (j `onAbort` deref)
+                       stmt  <- bodyE z (j `onAbort` deref)
                                        return $ IfThenElse (cont j)
-				  		    (IfThenElse cond
-						                stmt
-							        (   (cont j <== false)
+                              (IfThenElse cond
+                                        stmt
+                                    (   (cont j <== false)
                                                                 >>> deref
                                                                 >>> abort j))
-						    (deref >>> abort j)
-			 in IfThenElse (is_fst i) @$ local (const FirstS)  (f in1 lsuper) 
+                            (deref >>> abort j)
+             in IfThenElse (is_fst i) @$ local (const FirstS)  (f in1 lsuper) 
                                                   @. local (const SecondS) (f in2 rsuper)
        , addE        = inSeq $ addE
        , failE       = \i -> inSeq failE i @>>>@ dec_ref i
        , returnE     = \i -> 
-			     let j1 deref = i `withPath` in1 `onCommit` deref
+                 let j1 deref = i `withPath` in1 `onCommit` deref
                                  j2 deref = i `withPath` in2 `onCommit` deref
                              in seqSwitch (dec_ref1 i >>= returnE lsuper . j1)
                                           (dec_ref2 (j2 Skip) >>= returnE rsuper . j2) 
@@ -537,16 +537,16 @@ orLoop uid lsuper rsuper =
                                 in (local (const SecondS) $
                                     do stmt1 <- initTreeState_ j2 rsuper 
                                        stmt2 <- tryE rsuper j2
-				       return (dec (ref_count j1) 
+                       return (dec (ref_count j1) 
                                                >>> ifthen (ref_count j1 @== 0) 
-				                        (   SHook ("TreeState or_tstate" ++ show uid ++ ";")
-							>>> (baseTstate j2 <== parent j1)
+                                        (   SHook ("TreeState or_tstate" ++ show uid ++ ";")
+                            >>> (baseTstate j2 <== parent j1)
                                                         >>> (is_fst i' <== false)
                                                         >>> Delete (estate j1)
                                                         >>> (estate j2 <== New s2)  
-				                        >>> (ref_count j2 <== 1)
-				                        >>> (cont j2 <== true)
-  				                        >>> seqs [estate j2 @=> f <== init | (f,init) <- fs2 ]	
+                                        >>> (ref_count j2 <== 1)
+                                        >>> (cont j2 <== true)
+                                          >>> seqs [estate j2 @=> f <== init | (f,init) <- fs2 ]    
                                                         >>> stmt1 >>> stmt2)))
         dec_ref2  = \j -> return $ dec (ref_count j) >>> ifthen (ref_count j @== 0) (Delete (estate j))
         push dir  = \i -> seqSwitch (push1 dir i) (push2 dir i)
@@ -577,7 +577,7 @@ repeatLoop uid super =
        { 
          structs     = structs super @++@ mystructs 
        , treeState_  = ("dummy", Int, 
-				\i -> (parent i <== baseTstate i)
+                \i -> (parent i <== baseTstate i)
                                       >>> clone i (cloneBase i)
                        ) : treeState_ super -- `withClone` (\k -> inc $ ref_count k)
        , evalState   = ("cont",Bool,true) : ("ref_count",Int,1) : ("parent",THook "TreeState",Null) : evalState super
@@ -585,14 +585,14 @@ repeatLoop uid super =
        , pushRight   = push pushRight
        , bodyE       = \i -> do cond  <- continue super (tstate i)
                                 deref <- dec_ref i
-			        stmt  <- bodyE super (i `onAbort` deref)
+                    stmt  <- bodyE super (i `onAbort` deref)
                                 return $ IfThenElse (cont i)
-				  		    (IfThenElse cond
-						                stmt
-							        (   (cont i <== false)
+                              (IfThenElse cond
+                                        stmt
+                                    (   (cont i <== false)
                                                                 >>> deref
                                                                 >>> abort i))
-						    (deref >>> abort i)
+                            (deref >>> abort i)
        , addE        = addE super
        , failE       = \i -> failE super i @>>>@ dec_ref i
        , returnE     = \i -> let j deref = i `onCommit` deref
@@ -612,16 +612,16 @@ repeatLoop uid super =
                            in do flag <- ask 
                                  if flag 
                                    then local (const False) $ do
-				 	stmt1 <- initTreeState_ i' super 
-                                 	stmt2 <- tryE super i'
-			         	return (dec (ref_count i) 
+                     stmt1 <- initTreeState_ i' super 
+                                     stmt2 <- tryE super i'
+                         return (dec (ref_count i) 
                                                >>> ifthen (ref_count i @== 0) 
-			                           (   SHook ("TreeState or_tstate" ++ show uid ++ ";")
-			   			   >>> (baseTstate i' <== parent i)
-						   >>> clone (cloneBase i) i'
-			                           >>> (ref_count i' <== 1)
-			                           >>> (cont i' <== true)
-  			                           >>> seqs [estate i' @=> f <== init | (f,init) <- fs1 ]	
+                                       (   SHook ("TreeState or_tstate" ++ show uid ++ ";")
+                              >>> (baseTstate i' <== parent i)
+                           >>> clone (cloneBase i) i'
+                                       >>> (ref_count i' <== 1)
+                                       >>> (cont i' <== true)
+                                         >>> seqs [estate i' @=> f <== init | (f,init) <- fs1 ]    
                                                    >>> stmt1 >>> stmt2))
                                    else  return $dec (ref_count i) >>> ifthen (ref_count i @== 0) (Delete (space $ cloneBase i))
         push dir  = \i -> dir super (i `onCommit` inc (ref_count i))
@@ -633,7 +633,7 @@ forLoop n uid (super,iscomplete) =
        { 
          structs     = structs super @++@ mystructs 
        , treeState_  = ("dummy", Int, 
-				\i -> (parent i <== baseTstate i)
+                \i -> (parent i <== baseTstate i)
                                       >>> clone i (cloneBase i)
                        ) : treeState_ super
        , evalState   = ("counter",Int,0) : ("cont",Bool,true) : ("ref_count",Int,1) : ("parent",THook "TreeState",Null) : evalState super
@@ -641,14 +641,14 @@ forLoop n uid (super,iscomplete) =
        , pushRight   = push pushRight
        , bodyE       = \i -> do cond  <- continue super (tstate i)
                                 deref <- dec_ref i
-			        stmt  <- bodyE super (i `onAbort` deref)
+                    stmt  <- bodyE super (i `onAbort` deref)
                                 return $ IfThenElse (cont i)
-				  		    (IfThenElse cond
-						                stmt
-							        (   (cont i <== false)
+                              (IfThenElse cond
+                                        stmt
+                                    (   (cont i <== false)
                                                                 >>> deref
                                                                 >>> abort i))
-						    (deref >>> abort i)
+                            (deref >>> abort i)
        , addE        = addE super
        , failE       = \i -> failE super i @>>>@ dec_ref i
        , returnE     = \i -> let j deref = i `onCommit` deref
@@ -669,20 +669,20 @@ forLoop n uid (super,iscomplete) =
                            in do flag <- ask 
                                  if flag 
                                    then local (const False) $ do
-				 	stmt1 <- initTreeState_ i' super 
-                                 	stmt2 <- tryE super (i' `withField` ("counter", counter))
-			         	return (dec (ref_count i) 
+                     stmt1 <- initTreeState_ i' super 
+                                     stmt2 <- tryE super (i' `withField` ("counter", counter))
+                         return (dec (ref_count i) 
                                                >>> ifthen (ref_count i @== 0) 
                                                      (   inc (counter i)
                                                      >>> ifthen (counter i @< IVal n &&& Not (iscomplete i))
-				                           (   SHook ("TreeState or_tstate" ++ show uid ++ ";")
-				   			   >>> (baseTstate i' <== parent i)
-							   >>> clone (cloneBase i) i'
-				                           >>> (ref_count i' <== 1)
-				                           >>> (cont i' <== true)
-	  			                           >>> seqs [estate i' @=> f <== init | (f,init) <- fs1 ]	
-	                                                   >>> stmt1 >>> stmt2)
-						     ))
+                                           (   SHook ("TreeState or_tstate" ++ show uid ++ ";")
+                                  >>> (baseTstate i' <== parent i)
+                               >>> clone (cloneBase i) i'
+                                           >>> (ref_count i' <== 1)
+                                           >>> (cont i' <== true)
+                                             >>> seqs [estate i' @=> f <== init | (f,init) <- fs1 ]    
+                                                       >>> stmt1 >>> stmt2)
+                             ))
                                    else  return $dec (ref_count i) >>> ifthen (ref_count i @== 0) (Delete (space $ cloneBase i))
         push dir  = \i -> dir super (i `onCommit` inc (ref_count i))
 
@@ -692,10 +692,10 @@ untilLoop cond uid (lsuper', liscomplete) (rsuper, riscomplete) =
   Eval { structs     = structs lsuper @++@ structs rsuper @++@ mystructs 
        , treeState_   = [entry "is_fst" Bool (assign true)
                        ,("seq_union", Union [(SType s3,"fst"),(SType s4,"snd")], 
-				 \i -> 
+                 \i -> 
                                    let j = i `withPath` in1
                                    in  seqs [init j | (f,init) <- fs3]
-				       >>> initSubEvalState j s1 fs1)
+                       >>> initSubEvalState j s1 fs1)
                        ]
        , evalState   = [("until_complete",Bool,true)]
        , pushLeft    = push pushLeft
@@ -704,13 +704,13 @@ untilLoop cond uid (lsuper', liscomplete) (rsuper, riscomplete) =
                          let f y z iscomplete = 
                                let j = i `withPath` y `onAbort` dec_ref i j iscomplete
                                in   do stmt <- bodyE z j
-		                       cond <- continue z (estate j)
+                               cond <- continue z (estate j)
                                        return $ IfThenElse (cont j)
-				  		    (IfThenElse cond
-						                stmt
-							        (cont j <== false >>> abort j))
-						    (abort j)
-			 in do s1 <- local (const FirstS)  $ f in1 lsuper liscomplete
+                              (IfThenElse cond
+                                        stmt
+                                    (cont j <== false >>> abort j))
+                            (abort j)
+             in do s1 <- local (const FirstS)  $ f in1 lsuper liscomplete
                                s2 <- local (const SecondS) $ f in2 rsuper riscomplete
                                return $ IfThenElse (is_fst i) s1 s2
        , addE        = inSeq $ addE
@@ -724,12 +724,12 @@ untilLoop cond uid (lsuper', liscomplete) (rsuper, riscomplete) =
                                             do stmt1 <- initTreeState_ j2 rsuper 
                                                stmt2 <- tryE rsuper j2
                                                return (dec_ref i j1 liscomplete
-                                            	      >>> (is_fst i <== false) 
-						      >>> initSubEvalState j2 s2 fs2
+                                                      >>> (is_fst i <== false) 
+                              >>> initSubEvalState j2 s2 fs2
                                                       >>> stmt1 >>> stmt2)
                                           ) >>= \stmt2 ->
                                           return $ IfThenElse (readStat cond j1)
-							      stmt2
+                                  stmt2
                                                               stmt
                                          )
                                          (tryE rsuper j2) 
@@ -776,9 +776,9 @@ untilLoop cond uid (lsuper', liscomplete) (rsuper, riscomplete) =
         ref_count = \i -> estate i @=> "ref_count"
         complete  = \i -> estate i @=> "until_complete"
         initSubEvalState = \j s fs ->     (estate j <== New s)  
-				      >>> (ref_count j <== 1)
-			              >>> (cont j <== true)
-  				      >>> seqs [estate j @=> f <== init | (f,init) <- fs]	
+                      >>> (ref_count j <== 1)
+                          >>> (cont j <== true)
+                        >>> seqs [estate j @=> f <== init | (f,init) <- fs]    
 
 --------------------------------------------------------------------------------
 ldsLoop :: Monad m => Int32 -> MkEval m
@@ -787,10 +787,10 @@ ldsLoop limit super = return $ dummyLoop super
                      , evalState  = ("lds_complete", Bool, true) : evalState super
                      , pushLeft   = \i -> pushLeft  super (i `onCommit` mkCopy i "lds")
                      , pushRight  = \i -> pushRight super (i `onCommit` mkUpdate i "lds" (\x -> x - 1)) >>= \stmt -> 
-						return $ IfThenElse 
-							   (tstate (old i) @-> "lds" @>= 0) 
+                        return $ IfThenElse 
+                               (tstate (old i) @-> "lds" @>= 0) 
                                                            stmt
-							   (abort i >>> (estate i @=> "lds_complete" <== false))
+                               (abort i >>> (estate i @=> "lds_complete" <== false))
                      }
 
 
@@ -799,11 +799,11 @@ dbsLoop :: Monad m => Int32 -> MkEval m
 dbsLoop limit super = return $ dummyLoop super
                      { treeState_  = entry "depth_limit" Int (assign $ IVal limit) : treeState_ super
                      , evalState  = ("dbs_complete", Bool, true) : evalState super
-		     , pushLeft   = push pushLeft
+             , pushLeft   = push pushLeft
                      , pushRight  = push pushRight
                      }
   where push dir = 
-	  \i -> dir super (i `onCommit` mkUpdate i "depth_limit" (\x -> x - 1)) >>= \stmt ->
+      \i -> dir super (i `onCommit` mkUpdate i "depth_limit" (\x -> x - 1)) >>= \stmt ->
                 return $ IfThenElse (tstate (old i) @-> "depth_limit" @>= 0)
                                     stmt
                                     ((estate i @=> "dbs_complete" <== false) >>> abort i)
@@ -813,7 +813,7 @@ nbLoop :: Monad m => Int32 -> MkEval m
 nbLoop limit super = return $ dummyLoop super
                      { evalState  = ("nodes", Int, IVal limit)  :
                                     ("nb_complete", Bool, true) : evalState super,
-		       bodyE      = \i -> bodyE super i >>= \r -> return $ dec (estate i @=> "nodes") >>> r,
+               bodyE      = \i -> bodyE super i >>= \r -> return $ dec (estate i @=> "nodes") >>> r,
                        continue   = \estate -> continue super estate >>= \r -> return $ (estate @=> "nodes" @> 0) &&& r
                      }
 
@@ -828,7 +828,7 @@ onceLoop :: Monad m => MkEval m
 onceLoop super = return $ dummyLoop super
                      { evalState  = ("once",Bool,true) : evalState super
                      , returnE    = \i -> returnE super (i {commit = (estate i @=> "once" <== false) >>> commit i})
-		     , continue   = \estate -> continue super estate >>= \r -> return $ (estate @=> "once") &&& r
+             , continue   = \estate -> continue super estate >>= \r -> return $ (estate @=> "once") &&& r
                      }
 
 --------------------------------------------------------------------------------
@@ -845,7 +845,7 @@ bbLoop var super = return $ dummyLoop super
   { treeState_  = entry "tree_bound_version" Int (assign 0) : treeState_ super
   , evalState   = ("bound_version",Int,0) : ("bound",Int,IVal maxBound) : evalState super
   , returnE     = \i -> returnE super (i `onCommit`
-			   let get = VHook (rp 0 (space i) ++ "->getVar($VAR_" ++ var ++ ").min()")
+               let get = VHook (rp 0 (space i) ++ "->getVar($VAR_" ++ var ++ ").min()")
                            in  (Update (estate i @=> "bound") get >>> inc (estate i @=> "bound_version"))) 
   , bodyE = \i -> let set = Post (space i) (VHook (rp 0 (space i) ++ "->getVar($VAR_" ++ var ++ ")") $< (estate i @=> "bound"))
                               in  do r <- bodyE super i
@@ -1095,14 +1095,14 @@ s1 <@> s2 =
     Search { mkeval = evals1, runsearch = runs1, iscomplete = iscompletes1 } ->
       case s2 of
         Search { mkeval = evals2, runsearch = runs2, iscomplete = iscompletes2 } ->
-	  Search {mkeval =
-	          \super -> do { s2' <- evals2 $ mapE (L . L . mmap runL . runL)  super
-	                       ; s1' <- evals1 (mapE runL s2')
-	                       ; return $ mapE (L . mmap L . runL) s1'
-	                       }
-	         , runsearch  = runs2 . runs1 . runL
-	         , iscomplete = \i -> iscompletes1 i  &&& iscompletes2 i
-	         }
+      Search {mkeval =
+              \super -> do { s2' <- evals2 $ mapE (L . L . mmap runL . runL)  super
+                           ; s1' <- evals1 (mapE runL s2')
+                           ; return $ mapE (L . mmap L . runL) s1'
+                           }
+             , runsearch  = runs2 . runs1 . runL
+             , iscomplete = \i -> iscompletes1 i  &&& iscompletes2 i
+             }
 
 (<&>)
   :: Search
@@ -1113,18 +1113,18 @@ s1 <&> s2 =
     Search { mkeval = evals1, runsearch = runs1, iscomplete = iscompletes1 } ->
       case s2 of
         Search { mkeval = evals2, runsearch = runs2, iscomplete = iscompletes2 } ->
-	  Search {mkeval =
-	          \super -> do { s2' <- evals2 $ mapE (L . L . L . mmap (mmap runL . runL) . runL)  super
-	                       ; s1' <- evals1 $ mapE (L . L . mmap (mmap runL . runL) . runL) super
-			       ; uid <- get
-			       ; put (uid + 1)
-	                       ; return $ mapE (L . mmap L . runL) $ 
-			           	seqLoop uid (mapE (L . mmap (mmap L) . runL . runL) s1')
-	                                               (mapE (L . mmap (mmap L) . runL . runL . runL) s2')
-	                       }
-	        , runsearch  = runs2 . runs1 . runL . runReaderT FirstS . runL
-	        , iscomplete = const true -- DUMMY VALUE
-	        }
+      Search {mkeval =
+              \super -> do { s2' <- evals2 $ mapE (L . L . L . mmap (mmap runL . runL) . runL)  super
+                           ; s1' <- evals1 $ mapE (L . L . mmap (mmap runL . runL) . runL) super
+                   ; uid <- get
+                   ; put (uid + 1)
+                           ; return $ mapE (L . mmap L . runL) $ 
+                           seqLoop uid (mapE (L . mmap (mmap L) . runL . runL) s1')
+                                                   (mapE (L . mmap (mmap L) . runL . runL . runL) s2')
+                           }
+            , runsearch  = runs2 . runs1 . runL . runReaderT FirstS . runL
+            , iscomplete = const true -- DUMMY VALUE
+            }
 
 (<|>)
   :: Search
@@ -1135,18 +1135,18 @@ s1 <|> s2 =
     Search { mkeval = evals1, runsearch = runs1, iscomplete = iscompletes1 } ->
       case s2 of
         Search { mkeval = evals2, runsearch = runs2, iscomplete = iscompletes2 } ->
-	  Search {mkeval =
-	          \super -> do { s2' <- evals2 $ mapE (L . L . L . mmap (mmap runL . runL) . runL)  super
-	                       ; s1' <- evals1 $ mapE (L . L . mmap (mmap runL . runL) . runL) super
-			       ; uid <- get
-			       ; put (uid + 1)
-	                       ; return $ mapE (L . mmap L . runL) $ 
-			           	orLoop uid (mapE (L . mmap (mmap L) . runL . runL) s1')
-	                                               (mapE (L . mmap (mmap L) . runL . runL . runL) s2')
-	                       }
-	         , runsearch  = runs2 . runs1 . runL . runReaderT FirstS . runL
-	         , iscomplete = \i -> Cond (tstate i @-> "is_fst") (iscompletes1 (i `withPath` in1)) (iscompletes2 (i`withPath` in2))
-	         }
+      Search {mkeval =
+              \super -> do { s2' <- evals2 $ mapE (L . L . L . mmap (mmap runL . runL) . runL)  super
+                           ; s1' <- evals1 $ mapE (L . L . mmap (mmap runL . runL) . runL) super
+                   ; uid <- get
+                   ; put (uid + 1)
+                           ; return $ mapE (L . mmap L . runL) $ 
+                           orLoop uid (mapE (L . mmap (mmap L) . runL . runL) s1')
+                                                   (mapE (L . mmap (mmap L) . runL . runL . runL) s2')
+                           }
+             , runsearch  = runs2 . runs1 . runL . runReaderT FirstS . runL
+             , iscomplete = \i -> Cond (tstate i @-> "is_fst") (iscompletes1 (i `withPath` in1)) (iscompletes2 (i`withPath` in2))
+             }
 
 mmap :: (FMonadT t, Monad m, Monad n) => (forall x. m x -> n x) -> t m a -> t n a
 mmap f x = tmap' mfunctor mfunctor id f x
@@ -1198,18 +1198,18 @@ until cond s1 s2 =
     Search { mkeval = evals1, runsearch = runs1, iscomplete = iscompletes1 } ->
       case s2 of
         Search { mkeval = evals2, runsearch = runs2, iscomplete = iscompletes2 } ->
-	  Search { mkeval =
-	          \super -> do { s2' <- evals2 $ mapE (L . L . L . mmap (mmap runL . runL) . runL)  super
-	                       ; s1' <- evals1 $ mapE (L . L . mmap (mmap runL . runL) . runL) super
-		   	       ; uid <- get
-		   	       ; put (uid + 1)
-	                       ; return $ mapE (L . mmap L . runL) $ 
-		   			untilLoop cond uid (mapE (L . mmap (mmap L) . runL . runL) s1', iscompletes1)
-	                                                      (mapE (L . mmap (mmap L) . runL . runL . runL) s2', iscompletes2)
-	                       }
-	         , runsearch  = runs2 . runs1 . runL . runReaderT FirstS . runL
-	         , iscomplete = \i -> estate i @=> "until_complete"
-	         } 
+      Search { mkeval =
+              \super -> do { s2' <- evals2 $ mapE (L . L . L . mmap (mmap runL . runL) . runL)  super
+                           ; s1' <- evals1 $ mapE (L . L . mmap (mmap runL . runL) . runL) super
+                      ; uid <- get
+                      ; put (uid + 1)
+                           ; return $ mapE (L . mmap L . runL) $ 
+                       untilLoop cond uid (mapE (L . mmap (mmap L) . runL . runL) s1', iscompletes1)
+                                                          (mapE (L . mmap (mmap L) . runL . runL . runL) s2', iscompletes2)
+                           }
+             , runsearch  = runs2 . runs1 . runL . runReaderT FirstS . runL
+             , iscomplete = \i -> estate i @=> "until_complete"
+             } 
 
 repeat 
   :: Search
@@ -1217,16 +1217,16 @@ repeat
 repeat s = 
   case s of
     Search { mkeval = evals, runsearch = runs, iscomplete = iscompletes } ->
-	  Search { mkeval =
-	            \super ->
-	           do { uid <- get
-	              ; put (uid + 1)
-	              ; s' <- evals $ mapE (L . L . mmap runL . runL) super
-	              ; return $ mapE (L . mmap L . runL) $ repeatLoop uid $ mapE runL s' 
-	              }
-	         , runsearch  =  runs . runReaderT True . runL
-	         , iscomplete = const true -- PROPER VALUE (TODO: repeat only steps when the search is complete)
-	         } 
+      Search { mkeval =
+                \super ->
+               do { uid <- get
+                  ; put (uid + 1)
+                  ; s' <- evals $ mapE (L . L . mmap runL . runL) super
+                  ; return $ mapE (L . mmap L . runL) $ repeatLoop uid $ mapE runL s' 
+                  }
+             , runsearch  =  runs . runReaderT True . runL
+             , iscomplete = const true -- PROPER VALUE (TODO: repeat only steps when the search is complete)
+             } 
 
 for
   :: Int32
@@ -1235,16 +1235,16 @@ for
 for n s  = 
   case s of
     Search { mkeval = evals, runsearch = runs, iscomplete = iscompletes } ->
-	  Search { mkeval =
-	           \super ->
-	           do { uid <- get
-	              ; put (uid + 1)
-	              ; s' <- evals $ mapE (L . L . mmap runL . runL) super
-	              ; return $ mapE (L . mmap L . runL) $ forLoop n uid (mapE runL s', iscompletes)
-	              }
-	         , runsearch   = runs . runReaderT True . runL
-	         , iscomplete  = iscompletes
-	         }
+      Search { mkeval =
+               \super ->
+               do { uid <- get
+                  ; put (uid + 1)
+                  ; s' <- evals $ mapE (L . L . mmap runL . runL) super
+                  ; return $ mapE (L . mmap L . runL) $ forLoop n uid (mapE runL s', iscompletes)
+                  }
+             , runsearch   = runs . runReaderT True . runL
+             , iscomplete  = iscompletes
+             }
 
 foreach
   :: Int32
@@ -1323,9 +1323,9 @@ depthStat :: Stat
 depthStat = 
   Stat (\super -> 
                let push dir = \i -> dir super (i `onCommit` mkUpdate i "depth" (\x -> x + 1))
-	       in super
+           in super
                      { treeState_ = entry "depth" Int (assign $ 0) : treeState_ super
-		     , pushLeft   = push pushLeft
+             , pushLeft   = push pushLeft
                      , pushRight  = push pushRight
                      })
        (\info -> tstate info @-> "depth")
