@@ -10,7 +10,6 @@
  - 	Tom Schrijvers
  -} 
 
--- {-# OPTIONS_GHC -fglasgow-exts #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}

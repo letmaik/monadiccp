@@ -1,5 +1,3 @@
--- {-# OPTIONS -fglasgow-exts #-}
-
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
@@ -8,7 +6,6 @@ module Control.Search.SStateT (
   Tup2(..), snd2, fst2
 ) where
 
---import Monatron.Operations
 import Control.Monad.Fix
 import Control.Monatron.MonadT
 import Control.Monatron.AutoInstances ()

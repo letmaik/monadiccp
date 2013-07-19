@@ -1,13 +1,13 @@
 {- 
  - Origin:
- - 	Constraint Programming in Haskell 
- - 	http://overtond.blogspot.com/2008/07/pre.html
- - 	author: David Overton, Melbourne Australia
+ -     Constraint Programming in Haskell 
+ -     http://overtond.blogspot.com/2008/07/pre.html
+ -     author: David Overton, Melbourne Australia
  -
  - Modifications:
- - 	Monadic Constraint Programming
- - 	http://www.cs.kuleuven.be/~toms/Haskell/
- - 	Tom Schrijvers
+ -     Monadic Constraint Programming
+ -     http://www.cs.kuleuven.be/~toms/Haskell/
+ -     Tom Schrijvers
  -} 
 
 {-# LANGUAGE FlexibleInstances #-}

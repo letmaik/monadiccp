@@ -45,6 +45,11 @@ library
                         Control.CP.FD.Example
                         Control.CP.FD.FD
                         Control.CP.Debug
+                        Control.CP.FD.SearchSpec.Data
+                        Control.CP.FD.OvertonFD.Domain
+                        Control.CP.FD.SimpleFD
+                        Control.CP.FD.Graph
+                        Control.CP.FD.Decompose             
                         Control.Search.Language
                         Control.Search.Stat
                         Control.Search.Generator
@@ -69,14 +74,9 @@ library
                         Control.Search.MemoReader
                         Control.Search.SStateT
                         Control.Mixin.Mixin
-    Other-Modules:	Data.Expr.Util
-                        Control.CP.FD.OvertonFD.Domain
-                        Control.CP.FD.SimpleFD
-                        Control.CP.FD.Graph
-                        Control.CP.FD.Decompose
-                        Control.CP.FD.SearchSpec.Data
                         Language.CPP.Syntax.AST
                         Language.CPP.Pretty
+    Other-Modules:	Data.Expr.Util
                         Control.Monatron.Monatron
                         Control.Monatron.MonadInfo
                         Control.Monatron.AutoLift
