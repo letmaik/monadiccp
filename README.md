@@ -1,4 +1,4 @@
-monadiccp [![Build Status](https://secure.travis-ci.org/neothemachine/monadiccp.png?branch=master)](http://travis-ci.org/neothemachine/monadiccp)
+monadiccp [![Build Status](https://travis-ci.org/neothemachine/monadiccp.svg?branch=master)](https://travis-ci.org/neothemachine/monadiccp)
 =========
 
 
