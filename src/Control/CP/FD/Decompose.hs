@@ -1,10 +1,11 @@
 {- 
- - 	Monadic Constraint Programming
- - 	http://www.cs.kuleuven.be/~toms/MCP/
- - 	Pieter Wuille
+ -      Monadic Constraint Programming
+ -      http://www.cs.kuleuven.be/~toms/MCP/
+ -      Pieter Wuille
  -}
 
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE DatatypeContexts #-}
 
 module Control.CP.FD.Decompose (
   DecompData,
@@ -83,7 +84,7 @@ baseDCState = DCState {
 
 -- | definition of a decomposer monad
 newtype DCMonad a = DCMonad { state :: State DCState a }
-  deriving (Monad, MonadState DCState)
+  deriving (Monad, Applicative, Functor, MonadState DCState)
 
 -- | transform an expression into a graph, taking and returning an updated state
 decomposeEx :: DecompData -> Int -> Model -> ([ModelBool],[ModelInt],[ModelCol]) -> Maybe EGModel -> (DecompData,EGModel,Int)

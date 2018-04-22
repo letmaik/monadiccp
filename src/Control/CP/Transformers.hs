@@ -1,12 +1,13 @@
 {- 
- - 	Monadic Constraint Programming
- - 	http://www.cs.kuleuven.be/~toms/Haskell/
- - 	Tom Schrijvers
+ -      Monadic Constraint Programming
+ -      http://www.cs.kuleuven.be/~toms/Haskell/
+ -      Tom Schrijvers
  -}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE ConstrainedClassMethods #-}
 module Control.CP.Transformers (
   eval,
   eval',
@@ -50,7 +51,7 @@ eval' i (Label m)  wl t es ts  = do tree <- m
  
 continue :: ContinueSig solver q t (ForResult t) 
 continue i wl t es  
-	| isEmptyQ wl  = endT i wl t es -- return (i,[])
+        | isEmptyQ wl  = endT i wl t es -- return (i,[])
         | otherwise    = let ((past,tree,ts),wl') = popQ wl
                          in  do goto past
                                 nextT i tree wl' t es ts 
@@ -62,13 +63,13 @@ continue i wl t es
 type SearchSig solver q t a =
      (Solver solver, Queue q, Transformer t,   
           Elem q ~ (Label solver,Tree solver a,TreeState t),
-	  ForSolver t ~ solver) 
+          ForSolver t ~ solver) 
      => Int -> Tree solver a -> q -> t -> EvalState t -> TreeState t -> solver (Int,[a])
 
 type ContinueSig solver q t a =
      (Solver solver, Queue q, Transformer t,   
           Elem q ~ (Label solver,Tree solver a,TreeState t),
-	  ForSolver t ~ solver) 
+          ForSolver t ~ solver) 
      => Int -> q -> t -> EvalState t -> solver (Int,[a])
 
 class Transformer t where

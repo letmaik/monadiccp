@@ -1,13 +1,13 @@
 {- 
  - Origin:
- - 	Constraint Programming in Haskell 
- - 	http://overtond.blogspot.com/2008/07/pre.html
- - 	author: David Overton, Melbourne Australia
+ -      Constraint Programming in Haskell 
+ -      http://overtond.blogspot.com/2008/07/pre.html
+ -      author: David Overton, Melbourne Australia
  -
  - Modifications:
- - 	Monadic Constraint Programming
- - 	http://www.cs.kuleuven.be/~toms/Haskell/
- - 	Tom Schrijvers
+ -      Monadic Constraint Programming
+ -      http://www.cs.kuleuven.be/~toms/Haskell/
+ -      Tom Schrijvers
  -} 
 
 {-# LANGUAGE TypeFamilies #-}
@@ -58,13 +58,13 @@ data OConstraint =
 instance Solver OvertonFD where
   type Constraint OvertonFD  = OConstraint
   type Label      OvertonFD  = FDState
-  add c  	= debug ("addOverton("++(show c)++")") $ addOverton c
-  run p   	= debug ("runOverton") $ runOverton p
-  mark	= get
-  goto	= put 
+  add c         = debug ("addOverton("++(show c)++")") $ addOverton c
+  run p         = debug ("runOverton") $ runOverton p
+  mark  = get
+  goto  = put 
 
 instance Term OvertonFD FDVar where
-  newvar 	= newVar ()
+  newvar        = newVar ()
   type Help OvertonFD FDVar = ()
   help _ _ = ()
 
@@ -89,7 +89,7 @@ addOverton (OAbs a b) = addAbs a b
 
 fd_domain :: FDVar -> OvertonFD [Int]
 fd_domain v = do d <- lookup v
-	         return $ elems d
+                 return $ elems d
 
 fd_objective :: OvertonFD FDVar
 fd_objective =
@@ -100,7 +100,7 @@ fd_objective =
 
 -- The FD monad
 newtype OvertonFD a = OvertonFD { unFD :: State FDState a }
-    deriving (Monad, MonadState FDState)
+    deriving (Monad, Applicative, Functor, MonadState FDState)
 
 -- FD variables
 newtype FDVar = FDVar { unFDVar :: Int } deriving (Ord, Eq, Show)
@@ -257,7 +257,7 @@ infix 4 .<.
     if  not $ Domain.null xv'
         then if not $ Domain.null yv'
                 then whenwhen (xv /= xv') (yv /= yv') (update x xv') (update y yv')
-	        else return False
+                else return False
         else return False
 
 -- Constrain one variable to have a value less than or equal to the value of another 
@@ -272,7 +272,7 @@ infix 4 .<=.
     if  not $ Domain.null xv'
         then if not $ Domain.null yv'
                 then whenwhen (xv /= xv') (yv /= yv') (update x xv') (update y yv')
-	        else return False
+                else return False
         else return False
 
 {-
@@ -310,7 +310,7 @@ addArithmeticConstraint getZDomain getXDomain getYDomain x y z = do
         yv <- lookup y
         zv <- lookup z
         let znew = debug "binaryArith:intersection" $ (debug "binaryArith:zv" $ zv) `intersection` (debug "binaryArith:getDomain" $ getDomain xv yv)
-	debug ("binaryArith:" ++ show z ++ " before: "  ++ show zv ++ show "; after: " ++ show znew) (return ())
+        debug ("binaryArith:" ++ show z ++ " before: "  ++ show zv ++ show "; after: " ++ show znew) (return ())
         if debug "binaryArith:null?" $ not $ Domain.null (debug "binaryArith:null?:znew" $ znew)
            then if (znew /= zv) 
                    then debug ("binaryArith:update") $ update z znew
@@ -342,7 +342,7 @@ addUnaryArithmeticConstraint getZDomain getXDomain x z = do
         xv <- lookup x
         zv <- lookup z
         let znew = zv `intersection` (getDomain xv)
-	debug ("unaryArith:" ++ show z ++ " before: "  ++ show zv ++ show "; after: " ++ show znew) (return ())
+        debug ("unaryArith:" ++ show z ++ " before: "  ++ show zv ++ show "; after: " ++ show znew) (return ())
         if not $ Domain.null znew
            then if (znew /= zv) 
                    then update z znew

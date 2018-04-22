@@ -1,13 +1,14 @@
 {- 
- - 	Monadic Constraint Programming
- - 	http://www.cs.kuleuven.be/~toms/Haskell/
- - 	Tom Schrijvers
+ -      Monadic Constraint Programming
+ -      http://www.cs.kuleuven.be/~toms/Haskell/
+ -      Tom Schrijvers
  -}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ImpredicativeTypes #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ConstrainedClassMethods #-}
 
 module Control.CP.ComposableTransformers (
   solve, restart,
@@ -81,7 +82,7 @@ nextTStack i tree q t es ts =
       TStack c ->
         nextCT tree c es ts (\tree' es' ts' -> eval' i tree' q t es' ts') 
                             (\es'       -> continue i q t es')
-			    (\es' -> endT i q t es')
+                            (\es' -> endT i q t es')
 
 --------------------------------------------------------------------------------
 type CSearchSig c a =
@@ -235,12 +236,12 @@ instance Solver solver => CTransformer (Composition es ts solver a) where
            (\tree' es1' ts1' -> nextCT tree' c2 es2 ts2 
                                    (\tree'' es2' ts2' -> eval' tree'' (es1',es2') (ts1',ts2'))
                                    (\es2' -> continue (es1',es2'))
-				   (\es2' -> exit (es1',es2')) ) 
+                                   (\es2' -> exit (es1',es2')) ) 
            (\es1' -> continue (es1',es2))
            (\es1' -> exit (es1',es2))
   returnCT (c1 :- c2) (es1,es2) continue exit =
     returnCT c1 es1 (\es1' -> returnCT c2 es2 (\es2' -> continue (es1',es2')) (\es2' -> exit (es1',es2'))) 
-		    (\es1' -> exit (es1',es2))
+                    (\es1' -> exit (es1',es2))
   completeCT (c1 :- c2) (es1,es2)  = completeCT c1 es1 && completeCT c2 es2
 
 --------------------------------------------------------------------------------
@@ -278,8 +279,8 @@ instance Solver solver => CTransformer (SealedCST es ts solver a) where
   type CTreeState (SealedCST es ts solver a) = ts
   type CForSolver (SealedCST es ts solver a) = solver
   type CForResult (SealedCST es ts solver a) = a
-  leftCT (Seal c) 	= leftCT c
-  rightCT (Seal c)	= rightCT c
+  leftCT (Seal c)       = leftCT c
+  rightCT (Seal c)      = rightCT c
   initCT (Seal c)       = initCT c
   nextCT tree (Seal c)  = nextCT tree c
   returnCT (Seal c)     = returnCT c
@@ -293,15 +294,15 @@ instance Solver solver => Transformer (RestartST es ts solver a) where
   type ForSolver (RestartST es ts solver a) = solver
   type ForResult (RestartST es ts solver a) = a
   initT  (RestartST (c:cs) _) tree  = 
- 	let (es,ts) = initCT c
+        let (es,ts) = initCT c
         in do l <-  mark
-	      return ((c,cs,es,l,tree),ts)
+              return ((c,cs,es,l,tree),ts)
   leftT  _ (c,_,_,_,_)      = leftCT c
   rightT _ (c,_,_,_,_)      = rightCT c
   nextT i tree q t es@(c,cs,es_c,l,tree0) ts = 
         nextCT tree c es_c ts (\tree' es_c' ts' -> eval' i tree' q t (c,cs,es_c',l,tree0) ts') 
                               (\es_c'       -> continue i q t (c,cs,es_c',l,tree0))
-			      (\es_c' -> endT i q t (c,cs,es_c',l,tree0))
+                              (\es_c' -> endT i q t (c,cs,es_c',l,tree0))
   returnT i wl t es@(c,cs,es_c,l,tree0)  = returnCT c es_c (\es_c' -> continue i wl t (c,cs,es_c',l,tree0)) (\es_c' -> endT i wl t (c,cs,es_c',l,tree0))
   endT i wl t es@(_,[],_,_,_)      = return (i,[])
   endT i wl t@(RestartST _ f) es@(c0,(c:cs),es_c0,l,tree0)   

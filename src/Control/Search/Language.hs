@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
 
 module Control.Search.Language  where 
 
@@ -95,12 +96,12 @@ data Value = IVal Int32
            | Field' Value String
            | PField Value String
            | Lt Value Value
-	   | Gq Value Value
-	   | Gt Value Value
-	   | Eq Value Value
-	   | BaseContinue
-	   | And Value Value
-	   | Or  Value Value
+           | Gq Value Value
+           | Gt Value Value
+           | Eq Value Value
+           | BaseContinue
+           | And Value Value
+           | Or  Value Value
            | Not Value
            | VHook String
            | Max Value Value
@@ -115,10 +116,10 @@ data Value = IVal Int32
            | WDegree Value
            | UbRegret Value
            | LbRegret Value
-	   | Median Value
+           | Median Value
            | Random 
-	   | Null
-	   | New Struct
+           | Null
+           | New Struct
            | Base
            | Cond Value Value Value
            | Assigned Value
@@ -303,16 +304,16 @@ data Statement = IfThenElse Value Statement Statement
                | Skip
                | Seq Statement Statement
                | Assign Value Value
-	       | Abort
-	       | Print Value [String]
+               | Abort
+               | Print Value [String]
                | SHook String
                | Post Value Constraint
                | Fold String Value Value Value (Value -> Value) (Value -> Value -> Value)
                | IFold String Value Value Value (Value -> Value) (Value -> Value -> Value)
                | BFold String Value Value Value (Value -> Value) (Value -> Value -> Value)
                | BIFold String Value Value Value (Value -> Value) (Value -> Value -> Value)
---	       | MFold String [(Value, Value->Value)] ([Value] -> [Value] -> Value)
-	       | Delete Value
+--             | MFold String [(Value, Value->Value)] ([Value] -> [Value] -> Value)
+               | Delete Value
                | Block Statement Statement
                | DebugOutput String
                | DebugValue String Value
@@ -380,7 +381,7 @@ instance Pretty Statement where
         prettyX_ (Push tstate)      = 
           text "st->queue->push_back" <> parens (pr tstate) <> text ";"
         prettyX_ (IfThenElse c t Skip)  =  text "if" <+> parens (pr c) <+> text "{" $+$ nest 2 (pr t) $+$ text "}"
-	prettyX_ (IfThenElse c t e)     =  text "if" <+> parens (pr c) <+> text "{" $+$ nest 2 (pr t) $+$ text "} else {" $+$ nest 2 (pr_ e) $+$ text "}"
+        prettyX_ (IfThenElse c t e)     =  text "if" <+> parens (pr c) <+> text "{" $+$ nest 2 (pr t) $+$ text "} else {" $+$ nest 2 (pr_ e) $+$ text "}"
         prettyX_ Skip =
           empty
         prettyX_ (Assign var (Minus val 1))

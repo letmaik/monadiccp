@@ -31,8 +31,9 @@
 
 
 import Control.CP.FD.Example
+import System.Environment
 
-main = example_sat_main_void model
+main = withArgs ["overton_run"] $ example_sat_main_void model
 
 model :: ExampleModel ()
 model _ = exists $ \col -> do

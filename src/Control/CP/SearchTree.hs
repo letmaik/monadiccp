@@ -1,9 +1,9 @@
 {-
  - The Tree data type, a generic modelling language for constraint solvers.
  -
- - 	Monadic Constraint Programming
- - 	http://www.cs.kuleuven.be/~toms/Haskell/
- - 	Tom Schrijvers
+ -      Monadic Constraint Programming
+ -      http://www.cs.kuleuven.be/~toms/Haskell/
+ -      Tom Schrijvers
  -}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE GADTs #-}
@@ -54,7 +54,7 @@ data Tree s a where
   Try     :: Tree s a -> Tree s a -> Tree s a          -- disjunction
   Add     :: Constraint s -> Tree s a -> Tree s a      -- sequentially adding a constraint to a tree
   NewVar  :: Term s t => (t -> Tree s a) -> Tree s a   -- add a new variable to a tree
-  Label   :: s (Tree s a) -> Tree s a      	       -- label with a strategy
+  Label   :: s (Tree s a) -> Tree s a                  -- label with a strategy
 
 flattenTree :: Solver s => Tree s a -> Maybe ([Constraint s],a)
 flattenTree Fail = Nothing
@@ -84,10 +84,14 @@ mapTree f (Try a b) = mapTree f a \/ mapTree f b
 mapTree f (Label l) = label $ (f l) >>= (\t -> return (mapTree f t))
 
 instance Solver s => Functor (Tree s) where
-	fmap  = liftM 
- 
+        fmap  = liftM 
+
+instance Solver s => Applicative (Tree s) where
+  pure = Return
+  (<*>) = ap
+        
 instance Solver s => Monad (Tree s) where
-  return = Return
+  return = pure
   (>>=)  = bindTree
   
 
@@ -102,15 +106,15 @@ Fail           `bindTree` k  = Fail
 insertTree     :: Solver s => Tree s a -> Tree s () -> Tree s a
 (NewVar f)   `insertTree` t  = NewVar (\x -> f x `insertTree` t)    
 (Add c  o)     `insertTree` t  = Add c (o `insertTree` t)
-other 	       `insertTree` t  = t /\ other
+other          `insertTree` t  = t /\ other
 
 {- Monad laws:
  -
  - 1. return x >>= f  ==  f x
  -
  -    return a >>= f  
- -    == Return a >>= f		(return def)
- -    == f x			(bind def) 
+ -    == Return a >>= f         (return def)
+ -    == f x                    (bind def) 
  -
  - 2. m >>= return  =  m
  -
@@ -118,52 +122,52 @@ other 	       `insertTree` t  = t /\ other
  -     case m of
  -     1) Return x -> 
  -          Return x >>= return
- -          == return x			(bind def)
- -          == Return x        		(return def)
+ -          == return x                 (bind def)
+ -          == Return x                 (return def)
  -     2) Fail ->
  -          Fail >>= return
- -          == Fail			(bind def)
+ -          == Fail                     (bind def)
  -     3)  Try l r >>= return
  -         == Try (l >>= return) (r >>= return) (bind def)
- -         == Try l r				(induction)
+ -         == Try l r                           (induction)
  -      4) Add c m >>= return
- -         == Add c (m >>= return) 	(bind def)
- -         == Add c m 			(induction) 
- - 	5) NewVar i f >>= return
- - 	   == NewVar i (\v -> f v >>= return) 	(bind def) 
- - 	   == NewVar i (\v -> f v)		((co)-induction?)
- - 	   == NewVar i f				(eta reduction)
- - 	6) Label sm >>= return
- - 	   == Label (sm >>= \m -> return (m >>= return))	(bind def)
- - 	   == Label (sm >>= \m -> return m)			(co-induction)
- - 	   == Label (sm >>= return)				(eta reduction)
- - 	   == Label sm						(2nd monad law for Monad s)
+ -         == Add c (m >>= return)      (bind def)
+ -         == Add c m                   (induction) 
+ -      5) NewVar i f >>= return
+ -         == NewVar i (\v -> f v >>= return)   (bind def) 
+ -         == NewVar i (\v -> f v)              ((co)-induction?)
+ -         == NewVar i f                                (eta reduction)
+ -      6) Label sm >>= return
+ -         == Label (sm >>= \m -> return (m >>= return))        (bind def)
+ -         == Label (sm >>= \m -> return m)                     (co-induction)
+ -         == Label (sm >>= return)                             (eta reduction)
+ -         == Label sm                                          (2nd monad law for Monad s)
  -
  - 3. (m >>= f) >>= g = m >>= (\x -> f x >>= g)
  - 
  -   By induction
  -     case m of
  -     1) (Return y >>= f) >>= g 
- -	  == f y >>= g					(bind def)
- -	  == (\x -> f x >>= g) y			(beta expansion)
- -	  == Return y >>= (\x -> f x >>= g)		(bind def)
+ -        == f y >>= g                                  (bind def)
+ -        == (\x -> f x >>= g) y                        (beta expansion)
+ -        == Return y >>= (\x -> f x >>= g)             (bind def)
  -     2) (Fail >>= f) >>= g
- -        == Fail >>= g					(bind def)
- -        == Fail					(bind def)
- -        == Fail >>= (\x -> f x >>= g)			(bind def) 
+ -        == Fail >>= g                                 (bind def)
+ -        == Fail                                       (bind def)
+ -        == Fail >>= (\x -> f x >>= g)                 (bind def) 
  -     3) (Try l r >>= f) >>= g
- -        == Try (l >>= f) (r >>= f)) >>= g 				(bind def)
- -        == Try ((l >>= f) >>= g) ((r >>= f) >>= g)			(bind def)
- -        == Try (l >>= (\x -> f x >>= g)) (r >>= (\x -> f x >>= g)) 	(induction)
- -        == Try l r >>= (\x -> f x >>= g)				(bind def)
+ -        == Try (l >>= f) (r >>= f)) >>= g                             (bind def)
+ -        == Try ((l >>= f) >>= g) ((r >>= f) >>= g)                    (bind def)
+ -        == Try (l >>= (\x -> f x >>= g)) (r >>= (\x -> f x >>= g))    (induction)
+ -        == Try l r >>= (\x -> f x >>= g)                              (bind def)
  -     4) (NewVar i m >>= f) >>= g
- -        == NewVar i (\v -> m v >>= f) >>= g			(bind def)
- -        == NewVar i (\w -> (\v -> m v >>= f) w >>= g)		(bind def)
- -        == NewVar i (\w -> (m w >>= f) >>= g)			(beta reduction)  
- -        == NewVar i (\w -> m w >>= (\x -> f x >>= g))		(co-induction)
- -        == NewVar i m >>= (\x -> f x >>= g)			(bind def)
+ -        == NewVar i (\v -> m v >>= f) >>= g                   (bind def)
+ -        == NewVar i (\w -> (\v -> m v >>= f) w >>= g)         (bind def)
+ -        == NewVar i (\w -> (m w >>= f) >>= g)                 (beta reduction)  
+ -        == NewVar i (\w -> m w >>= (\x -> f x >>= g))         (co-induction)
+ -        == NewVar i m >>= (\x -> f x >>= g)                   (bind def)
  -     5) (Label sm >>= f) >>= g
- -         == Label (sm >>= \m -> return (m >>= f)) >>= g 	(bind def) 
+ -         == Label (sm >>= \m -> return (m >>= f)) >>= g       (bind def) 
  -         == Label ((sm >>= \m -> return (m >>= f)) >>= \m' -> return (m' >>= g))
  -         == Label (sm >>= (\m -> return (m >>= f) >>= \m' -> return (m' >>= g)))
  -         == Label (sm >>= \m -> return ((m >>= f) >>= g))
@@ -288,12 +292,12 @@ showTree l (Label a) = do
   return $ indent l ++ "Label\n" ++ s
 
 instance Show (Tree s a)  where
-  show Fail		= "Fail"
-  show (Return _)	= "Return"
-  show (Try l r)	= "Try (" ++ show l ++ ") (" ++ show r ++ ")"
-  show (Add _ t)	= "Add (" ++ show t ++ ")"
-  show (NewVar _)	= "NewVar <function>"
-  show (Label _)	= "Label <monadic value>"
+  show Fail             = "Fail"
+  show (Return _)       = "Return"
+  show (Try l r)        = "Try (" ++ show l ++ ") (" ++ show r ++ ")"
+  show (Add _ t)        = "Add (" ++ show t ++ ")"
+  show (NewVar _)       = "NewVar <function>"
+  show (Label _)        = "Label <monadic value>"
 
 ----------------------------------------------------------------------
 -- Monad Transformer Instances

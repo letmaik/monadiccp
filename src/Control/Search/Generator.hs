@@ -677,7 +677,7 @@ memoize =
 {-# RULES
       "L"                          L = unsafeCoerce
   #-}
-{-# RULES
+{-  # RULES
         "runL"                       runL = unsafeCoerce
   #-}
 {-# RULES
