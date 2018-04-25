@@ -2,6 +2,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 
 module Control.CP.FD.Example (
   example_main,
@@ -97,10 +98,10 @@ example_min_main_single :: Read n => ExampleMinModel n -> IO ()
 example_min_main_single f = example_min_main (f . read . head) (error "Uncompilable model") (error "Uncompilable model")
 
 example_sat_main_single_expr :: ExampleModel ModelInt -> IO ()
-example_sat_main_single_expr f = example_sat_main (f . fromInteger . read . head) f (\x -> f $ x!(cte 0))
+example_sat_main_single_expr f = example_sat_main (f . fromInteger . read . head) f (\x -> f $ x!(cte (0::Integer)))
 
 example_min_main_single_expr :: ExampleMinModel ModelInt -> IO ()
-example_min_main_single_expr f = example_min_main (f . fromInteger . read . head) f (\x -> f $ x!(cte 0))
+example_min_main_single_expr f = example_min_main (f . fromInteger . read . head) f (\x -> f $ x!(cte (0::Integer)))
 
 example_sat_main_coll_expr :: ExampleModel ModelCol -> IO ()
 example_sat_main_coll_expr f = example_sat_main (f . list . foldr (++) [] . map (map fromInteger . read . (\x -> "[" ++ x ++ "]"))) (f. list . (\x -> [x])) f

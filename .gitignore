@@ -1,1 +1,5 @@
-/.project
+.project
+.stack-work
+.cabal-sandbox
+dist
+*~

@@ -8,9 +8,9 @@ Maintainer:		maik.riechert@arcor.de
 Build-Type:		Simple
 Category:		control
 Synopsis:		Constraint Programming
-Homepage:		http://users.ugent.be/~tschrijv/MCP/
-Bug-reports:		https://github.com/neothemachine/monadiccp/issues
-Cabal-Version:		>=1.6
+Homepage:		https://people.cs.kuleuven.be/~tom.schrijvers/MCP/
+Bug-reports:		https://github.com/letmaik/monadiccp/issues
+Cabal-Version:		>=1.8
 Extra-Source-Files: 	examples/*.hs
 Data-Files:		README.md
 
@@ -19,14 +19,16 @@ tested-with:
 
 source-repository head
   type:      git
-  location:  https://github.com/neothemachine/monadiccp.git
+  location:  https://github.com/letmaik/monadiccp.git
 
 Flag Debug
     Description:	Generate debug output
     Default:		False
 
 library
-    Build-Depends:	base >= 2, base < 5, containers, mtl, random, pretty, parsec >= 3.0
+    hs-source-dirs: src
+    Build-Depends:	base >= 2, base < 5, containers, mtl, random, pretty, parsec >= 3.0,
+                        semigroups
     Exposed-Modules:	Data.Expr.Sugar
                         Data.Expr.Data
                         Data.Expr.Util
@@ -96,3 +98,9 @@ library
         CC-Options:	"-ggdb3" "-Wall"
     else
         CC-Options:	"-g0" "-DNDEBUG" "-Wall"
+
+test-suite olympic
+   hs-source-dirs: examples
+   type: exitcode-stdio-1.0
+   main-is: Olympic.hs
+   build-depends: base, monadiccp

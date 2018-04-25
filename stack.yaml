@@ -1,0 +1,8 @@
+resolver: lts-11.5
+
+packages:
+- .
+
+system-ghc: true
+
+compiler-check: newer-minor

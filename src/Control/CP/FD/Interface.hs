@@ -6,6 +6,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE DatatypeContexts #-}
 
 module Control.CP.FD.Interface (
   FDSolver,
@@ -52,12 +53,20 @@ import Data.Expr.Sugar ((@+),(@-),(@*),(@/),(@%),(!),(@!!),(@..),(@++),size,xfol
 import Control.CP.Solver
 import Control.CP.SearchTree
 import Control.CP.EnumTerm
+import Control.Monad (ap, liftM)
 
 newtype DummySolver a = DummySolver ()
 
 instance Monad DummySolver where
-  return _ = DummySolver ()
+  return = pure
   _ >>= _ = DummySolver ()
+
+instance Applicative DummySolver where
+  pure _ = DummySolver ()
+  (<*>) = ap
+
+instance Functor DummySolver where
+  fmap = liftM
 
 data EQHelp b where
   EQHelp :: Model.ModelTermType b => ((b -> Model) -> Model) -> EQHelp b

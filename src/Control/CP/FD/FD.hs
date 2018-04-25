@@ -5,6 +5,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE DatatypeContexts #-}
 
 module Control.CP.FD.FD (
   module Data.Expr.Sugar,
@@ -606,7 +607,7 @@ data FDSolver s => FDLabel s = FDLabel {
 
 -- | definition of FDInstance, a Solver wrapper that adds power to post boolean expressions as constraints
 newtype FDSolver s => FDInstance s a = FDInstance { unFDInstance :: StateT (FDState s) s a }
-  deriving (Monad, MonadState (FDState s))
+  deriving (Monad, Applicative, Functor, MonadState (FDState s))
 
 -- | helper function to combine two Maybe's
 joinWith :: (a -> a -> a) -> Maybe a -> Maybe a -> Maybe a

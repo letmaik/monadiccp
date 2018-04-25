@@ -17,6 +17,7 @@ module Control.Search.Stat
   ) where
 
 import Text.PrettyPrint hiding (space)
+import Prelude hiding ((<>))
 
 import Control.Search.Language
 import Control.Search.GeneratorInfo

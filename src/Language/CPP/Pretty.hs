@@ -6,6 +6,7 @@ module Language.CPP.Pretty (
 ) where 
 
 import Text.PrettyPrint.HughesPJ
+import Prelude hiding ((<>))
 import Language.CPP.Syntax.AST
 
 class Pretty t where

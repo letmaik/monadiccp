@@ -51,7 +51,7 @@ runCont :: (a -> r) -> Cont r a  -> r
 runCont k = runId. runContT (Id. k)
 
 instance Monad Id where
-    return  = Id
+    return  = pure
     fail    = error
     m >>= f = f (runId m)
 
@@ -62,6 +62,9 @@ instance Monad Lift where
 
 instance Functor Id   where fmap = liftM
 instance Functor Lift where fmap = liftM
+
+instance Applicative Id where pure = Id ; (<*>) = ap
+instance Applicative Lift where pure = L ; (<*>) = ap
 
 instance MonadFix Id   where mfix f = let m = f (runId m)   in m
 instance MonadFix Lift where mfix f = let m = f (runLift m) in m
