@@ -38,7 +38,7 @@ main = withArgs ["overton_run"] $ example_sat_main_void model
 model :: ExampleModel ()
 model _ = exists $ \col -> do
   [x1,x2,x3,x4,x5,x6,x7,x8,x9,x10] <- colList col 10
-  col `allin` (cte 1, cte 10) 
+  col `allin` (cte (1 :: Integer), cte (10 :: Integer)) 
   allDiff col
   x1 @= 3
   minus x2 x3 x1
