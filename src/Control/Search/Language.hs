@@ -1,10 +1,13 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE CPP #-}
 
 module Control.Search.Language  where 
 
 import Text.PrettyPrint
 import Data.Monoid hiding ((<>))
+import Prelude hiding ((<>))
+import qualified Data.Semigroup as DS
 import Data.Int
 import qualified Data.Map as Map
 import Data.Map (Map)
@@ -21,6 +24,9 @@ xsspace fl@(PrettyFlags ModeGecode) x str = text "((VarAccessorSpace*)msg.space(
 instance Monoid Statement where
   mempty  = Skip
   mappend = (>>>)
+
+instance DS.Semigroup Statement where
+  (<>) = (>>>)
 
 data GenMode = ModeUnk | ModeGecode | ModeFZ | ModeMCP
   deriving Eq

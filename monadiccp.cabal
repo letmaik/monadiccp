@@ -27,7 +27,8 @@ Flag Debug
 
 library
     hs-source-dirs: src
-    Build-Depends:	base >= 2, base < 5, containers, mtl, random, pretty, parsec >= 3.0
+    Build-Depends:	base >= 2, base < 5, containers, mtl, random, pretty, parsec >= 3.0,
+                        semigroups
     Exposed-Modules:	Data.Expr.Sugar
                         Data.Expr.Data
                         Data.Expr.Util

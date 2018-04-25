@@ -43,6 +43,7 @@ module Control.Search.Generator
 import Debug.Trace
 
 import Text.PrettyPrint hiding (space)
+import Prelude hiding ((<>))
 import Data.List (sort, nub, sortBy)
 import Data.List (intercalate)
 import Data.Unique
@@ -63,6 +64,7 @@ import Control.Monatron.IdT
 import Data.Maybe (fromJust)
 import Data.Map (Map)
 import qualified Data.Map as Map
+import qualified Data.Semigroup as DS
 
 import Control.Search.SStateT
 
@@ -779,6 +781,9 @@ transformProgram fn p = p { header = inliner fn (header p), functions = map (\f 
 instance Monoid ProgramString where
   mempty = ProgramString { header = Skip, functions = [], main = Nothing, pcomment = [] }
   mappend p1 p2 = ProgramString { header = header p1 >>> header p2, functions = functions p1 ++ functions p2, main = maybe (main p2) Just (main p1), pcomment = pcomment p1 ++ pcomment p2 }
+
+instance DS.Semigroup ProgramString where
+  (<>) = mappend
 
 genprog :: PrettyFlags -> ProgramString -> String
 genprog fl p = concatMap (\x -> "// " ++ x ++ "\n\n") (pcomment p) ++ rpx 0 fl (header p) ++ concatMap (\x -> "\n" ++ genfun fl x ++ "\n") (functions p) ++ maybe "" (rpx 0 fl) (main p)
