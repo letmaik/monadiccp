@@ -14,9 +14,6 @@ Cabal-Version:		>=1.8
 Extra-Source-Files: 	examples/*.hs
 Data-Files:		README.md
 
-tested-with:     
-                 GHC==7.6.3
-
 source-repository head
   type:      git
   location:  https://github.com/letmaik/monadiccp.git
